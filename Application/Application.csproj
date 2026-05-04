@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="Features\DealCards\Queries\" />
+    <Folder Include="Features\FormTeam\Queries\" />
+    <Folder Include="Features\GameStarted\Queries\" />
+    <Folder Include="Features\PickTrump\Queries\" />
+    <Folder Include="Features\PlayCard\Queries\" />
+    <Folder Include="Features\StartNextRound\Queries\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MediatR" Version="14.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hokm.Domain\Hokm.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

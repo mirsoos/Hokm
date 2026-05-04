@@ -1,0 +1,32 @@
+# .NET Build outputs
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.csproj.user
+*.dbmdl
+
+# Rider
+*.DotSettings.user
+.idea/
+
+# VS Code
+.vscode/
+
+# NuGet packages
+packages/
+*.nupkg
+
+# Environment files
+*.env
+appsettings.*.local.json
+
+# gRPC generated files (they are in obj/, already ignored)
+# Proto files are source, keep them
+
+# OS files
+.DS_Store
+Thumbs.db
