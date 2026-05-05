@@ -3,7 +3,7 @@ using MediatR;
 
 namespace Application.Features.GameStarted.Commands
 {
-    public class GameStartedCommand : IRequest<Guid>
+    public class StartGameCommand : IRequest<Guid>
     {
         public PlayerDto Player1 { get; set; }
         public PlayerDto Player2 { get; set; }

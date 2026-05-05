@@ -3,11 +3,15 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.37012.4 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hokm", "Hokm\Hokm.csproj", "{04FA9C05-9F77-45DD-8525-C2EA1F8D8391}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hokm.Domain", "Hokm.Domain\Hokm.Domain.csproj", "{251D6354-309E-4B94-8DF8-F115E84240E2}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Application", "Application\Application.csproj", "{123F93EE-EB38-4BF3-B4EA-2A659A0CA259}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hokm.Infrastructure", "Hokm.Infrastructure\Hokm.Infrastructure.csproj", "{F37CFCBD-7DAA-4FA0-96D6-2CA26075C4C7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hokm.GrpcService", "Hokm.GrpcService\Hokm.GrpcService.csproj", "{1C9206C7-27E0-48C9-817E-6EA4E7FB533B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hokm.Contracts", "Hokm.Contracts\Hokm.Contracts.csproj", "{13E09ABA-1B52-4E71-BA41-97393A23BC39}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,10 +19,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{04FA9C05-9F77-45DD-8525-C2EA1F8D8391}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{04FA9C05-9F77-45DD-8525-C2EA1F8D8391}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{04FA9C05-9F77-45DD-8525-C2EA1F8D8391}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{04FA9C05-9F77-45DD-8525-C2EA1F8D8391}.Release|Any CPU.Build.0 = Release|Any CPU
 		{251D6354-309E-4B94-8DF8-F115E84240E2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{251D6354-309E-4B94-8DF8-F115E84240E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{251D6354-309E-4B94-8DF8-F115E84240E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -27,6 +27,18 @@ Global
 		{123F93EE-EB38-4BF3-B4EA-2A659A0CA259}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{123F93EE-EB38-4BF3-B4EA-2A659A0CA259}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{123F93EE-EB38-4BF3-B4EA-2A659A0CA259}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F37CFCBD-7DAA-4FA0-96D6-2CA26075C4C7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F37CFCBD-7DAA-4FA0-96D6-2CA26075C4C7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F37CFCBD-7DAA-4FA0-96D6-2CA26075C4C7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F37CFCBD-7DAA-4FA0-96D6-2CA26075C4C7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1C9206C7-27E0-48C9-817E-6EA4E7FB533B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1C9206C7-27E0-48C9-817E-6EA4E7FB533B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1C9206C7-27E0-48C9-817E-6EA4E7FB533B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1C9206C7-27E0-48C9-817E-6EA4E7FB533B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{13E09ABA-1B52-4E71-BA41-97393A23BC39}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{13E09ABA-1B52-4E71-BA41-97393A23BC39}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{13E09ABA-1B52-4E71-BA41-97393A23BC39}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{13E09ABA-1B52-4E71-BA41-97393A23BC39}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

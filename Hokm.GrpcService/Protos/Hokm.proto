@@ -1,0 +1,78 @@
+syntax = "proto3";
+package hokm;
+
+service HokmGameService {
+  rpc StartGame (StartGameRequest) returns (StartGameResponse);
+  rpc FormTeams (FormTeamsRequest) returns (FormTeamsResponse);
+  rpc DealCards (DealCardsRequest) returns (DealCardsResponse);
+  rpc PickTrump (PickTrumpRequest) returns (PickTrumpResponse);
+  rpc PlayCard (PlayCardRequest) returns (PlayCardResponse);
+  rpc GetGameState (GetGameStateRequest) returns (GameState);
+}
+
+message StartGameRequest {
+  string player1_id = 1;
+  string player1_name = 2;
+  string player1_side = 3;
+  string player2_id = 4;
+  string player2_name = 5;
+  string player2_side = 6;
+  string player3_id = 7;
+  string player3_name = 8;
+  string player3_side = 9;
+  string player4_id = 10;
+  string player4_name = 11;
+  string player4_side = 12;
+}
+
+message StartGameResponse {
+  string game_id = 1;
+}
+
+message FormTeamsRequest {
+  string game_id = 1;
+}
+
+message FormTeamsResponse {
+  string game_id = 1;
+}
+
+message DealCardsRequest {
+  string game_id = 1;
+  string dealer_id = 2;
+}
+
+message DealCardsResponse {
+  bool success = 1;
+}
+
+message PickTrumpRequest {
+  string game_id = 1;
+  string trump_suit = 2;
+  string dealer_id = 3;
+}
+
+message PickTrumpResponse {
+  bool success = 1;
+}
+
+message PlayCardRequest {
+  string game_id = 1;
+  string player_id = 2;
+  string suit = 3;
+  string rank = 4;
+}
+
+message PlayCardResponse {
+  bool success = 1;
+}
+
+message GetGameStateRequest {
+  string game_id = 1;
+}
+
+message GameState {
+  string game_id = 1;
+  string status = 2;
+  int32 current_round = 3;
+}
