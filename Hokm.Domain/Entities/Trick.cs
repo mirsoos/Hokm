@@ -3,9 +3,8 @@ using Hokm.Domain.ValueObjects;
 
 namespace Hokm.Domain.Entities
 {
-    public class Trick
+    public class Trick : BaseEntity
     {
-        public Guid Id { get; private set; } = Guid.NewGuid();
         public Dictionary<Guid, Card> PlayedCards { get; private set; }
         public Suit TrumpSuit { get; }
         public Suit? LedSuit { get; private set; }

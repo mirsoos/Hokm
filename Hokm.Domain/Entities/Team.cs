@@ -2,9 +2,8 @@
 
 namespace Hokm.Domain.Entities
 {
-    public class Team
+    public class Team : BaseEntity
     {
-        public Guid Id { get; private set; } = Guid.NewGuid();
         public List<Guid> PlayerIds { get; private set; }
         public int TotalScore { get; private set; } = 0;
         public TeamSide TeamSide { get; set; }

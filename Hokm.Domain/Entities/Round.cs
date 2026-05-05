@@ -3,9 +3,8 @@ using Hokm.Domain.ValueObjects;
 
 namespace Hokm.Domain.Entities
 {
-    public class Round
+    public class Round : BaseEntity
     {
-        public Guid Id { get; private set; } = Guid.NewGuid();
         public int RoundNumber { get; private set; }
         public Guid DealerId { get; private set; }
         public Suit TrumpSuit { get; private set; } = Suit.Deciding;

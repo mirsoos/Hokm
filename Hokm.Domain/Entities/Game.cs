@@ -3,14 +3,12 @@ using Hokm.Domain.ValueObjects;
 
 namespace Hokm.Domain.Entities
 {
-    public class Game
+    public class Game : BaseEntity
     {
-        public Guid Id { get; private set; } = Guid.NewGuid();
         public List<Player> Players { get; private set; }
         public List<Team> Teams { get; private set; }
         public List<Round> Rounds { get; private set; }
         public GameStatus Status { get; private set; }
-        public DateTime CreatedAt { get; private set; }
         public int? CurrentRoundIndex { get; private set; }
         public int? CurrentTrickIndex { get; private set; }
 
@@ -21,7 +19,7 @@ namespace Hokm.Domain.Entities
             Teams = new List<Team>();
             Rounds = new List<Round>();
             Status = GameStatus.WaitingForTeams;
-            CreatedAt = DateTime.UtcNow;
+            CreateDate = DateTime.UtcNow;
             CurrentRoundIndex = null;
             CurrentTrickIndex = null;
         }
