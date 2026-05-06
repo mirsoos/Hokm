@@ -1,8 +1,8 @@
-﻿using Hokm.Domain.Interfaces;
+﻿using Hokm.Application.Interfaces;
 using Hokm.Domain.ValueObjects;
 using MediatR;
 
-namespace Application.Features.PlayCard.Commands
+namespace Hokm.Application.Features.PlayCard.Commands
 {
     public class PlayCardCommandHandler : IRequestHandler<PlayCardCommand, Unit>
     {
@@ -14,12 +14,12 @@ namespace Application.Features.PlayCard.Commands
 
         public async Task<Unit> Handle(PlayCardCommand request, CancellationToken cancellationToken)
         {
-            var currentGame = await _gameRepository.GetByIdAsync(request.GameId);
+            var currentGame = await _gameRepository.GetByIdAsync(request.GameId, cancellationToken);
             if (currentGame == null)
                 throw new ArgumentNullException("Game not found with Id",nameof(request.GameId));
             var card = new Card(request.Suit,request.Rank);
             currentGame.PlayCard(request.PlayerId,card);
-            await _gameRepository.UpdateAsync(currentGame);
+            await _gameRepository.UpdateAsync(currentGame, cancellationToken);
             return Unit.Value;
         }
     }

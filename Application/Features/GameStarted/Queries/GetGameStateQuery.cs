@@ -1,8 +1,7 @@
-﻿using Application.DTOs;
-using Hokm.Domain.Entities;
+﻿using Hokm.Application.DTOs;
 using MediatR;
 
-namespace Application.Features.GameStarted.Queries
+namespace Hokm.Application.Features.GameStarted.Queries
 {
     public class GetGameStateQuery : IRequest<GameStateDto>
     {

@@ -1,7 +1,7 @@
 ﻿using Hokm.Domain.Enums;
 using MediatR;
 
-namespace Application.Features.PickTrump.Commands
+namespace Hokm.Application.Features.PickTrump.Commands
 {
     public class PickTrumpCommand : IRequest<Unit>
     {

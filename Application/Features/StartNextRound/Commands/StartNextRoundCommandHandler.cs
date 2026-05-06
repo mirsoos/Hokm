@@ -1,7 +1,7 @@
-﻿using Hokm.Domain.Interfaces;
+﻿using Hokm.Application.Interfaces;
 using MediatR;
 
-namespace Application.Features.StartNextRound.Commands
+namespace Hokm.Application.Features.StartNextRound.Commands
 {
     public class StartNextRoundCommandHandler : IRequestHandler<StartNextRoundCommand, Unit>
     {
@@ -12,12 +12,12 @@ namespace Application.Features.StartNextRound.Commands
         }
         public async Task<Unit> Handle(StartNextRoundCommand request, CancellationToken cancellationToken)
         {
-            var game = await _gameRepository.GetByIdAsync(request.GameId);
+            var game = await _gameRepository.GetByIdAsync(request.GameId, cancellationToken);
             if (game == null)
                 throw new ArgumentNullException("Game not found with Id",nameof(request.GameId));
 
             game.StartNextRound();
-            await _gameRepository.UpdateAsync(game);
+            await _gameRepository.UpdateAsync(game, cancellationToken);
             return Unit.Value;
         }
     }

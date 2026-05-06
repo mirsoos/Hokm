@@ -1,7 +1,7 @@
-﻿using Application.DTOs;
+﻿using Hokm.Application.DTOs;
 using MediatR;
 
-namespace Application.Features.FormTeam.Commands
+namespace Hokm.Application.Features.FormTeam.Commands
 {
     public class FormTeamCommand : IRequest<FormedGamedDto>
     {

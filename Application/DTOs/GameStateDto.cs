@@ -1,6 +1,6 @@
 ﻿using Hokm.Domain.Enums;
 
-namespace Application.DTOs
+namespace Hokm.Application.DTOs
 {
     public class GameStateDto
     {

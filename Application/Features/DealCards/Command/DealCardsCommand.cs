@@ -1,6 +1,6 @@
 ﻿using MediatR;
 
-namespace Application.Features.DealCards.Command
+namespace Hokm.Application.Features.DealCards.Command
 {
     public class DealCardsCommand : IRequest<Unit>
     {

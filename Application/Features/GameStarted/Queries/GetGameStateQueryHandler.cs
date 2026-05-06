@@ -1,9 +1,9 @@
-﻿using Application.DTOs;
+﻿using Hokm.Application.DTOs;
 using Hokm.Domain.Entities;
-using Hokm.Domain.Interfaces;
+using Hokm.Application.Interfaces;
 using MediatR;
 
-namespace Application.Features.GameStarted.Queries
+namespace Hokm.Application.Features.GameStarted.Queries
 {
     public class GetGameStateQueryHandler : IRequestHandler<GetGameStateQuery, GameStateDto>
     {
@@ -16,7 +16,7 @@ namespace Application.Features.GameStarted.Queries
 
         public async Task<GameStateDto> Handle(GetGameStateQuery request, CancellationToken cancellationToken)
         {
-            var currentGame = await _gameRepository.GetByIdAsync(request.GameId);
+            var currentGame = await _gameRepository.GetByIdAsync(request.GameId, cancellationToken);
             return new GameStateDto
             {
                 GameId = currentGame.Id,

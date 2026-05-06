@@ -1,6 +1,6 @@
 ﻿using Hokm.Infrastructure.Persistence.Mongo.Configurations;
 using Hokm.Infrastructure.Persistence.Mongo.Context;
-using Hokm.Domain.Interfaces;
+using Hokm.Application.Interfaces;
 using Hokm.Infrastructure.Repositories.Implementations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +10,8 @@ using MongoDB.Driver;
 using StackExchange.Redis;
 using MassTransit;
 using System.Text;
+using Hokm.Infrastructure.Services.Redis.Interfaces;
+using Hokm.Infrastructure.Services.Redis.Implemetations;
 
 namespace Hokm.Infrastructure.Configurations
 {
@@ -66,6 +68,7 @@ namespace Hokm.Infrastructure.Configurations
             });
 
             services.AddScoped<IGameRepository, MongoGameRepository>();
+            services.AddScoped<IRedisCacheService, RedisCacheService>();
 
             return services;
         }

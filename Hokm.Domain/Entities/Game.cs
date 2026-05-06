@@ -19,7 +19,6 @@ namespace Hokm.Domain.Entities
             Teams = new List<Team>();
             Rounds = new List<Round>();
             Status = GameStatus.WaitingForTeams;
-            CreateDate = DateTime.UtcNow;
             CurrentRoundIndex = null;
             CurrentTrickIndex = null;
         }

@@ -13,7 +13,6 @@ namespace Hokm.Domain.Entities
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Player name cannot be empty.", nameof(name));
 
-            Id = id;
             Name = name;
             PlayerSide = playerSide;
         }

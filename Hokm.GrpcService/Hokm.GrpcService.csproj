@@ -20,7 +20,7 @@
   </ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\Application\Application.csproj" />
+	  <ProjectReference Include="..\Application\Hokm.Application.csproj" />
 	</ItemGroup>
 
 </Project>

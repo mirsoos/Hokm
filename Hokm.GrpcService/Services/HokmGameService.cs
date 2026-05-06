@@ -1,10 +1,10 @@
-﻿using Application.DTOs;
-using Application.Features.DealCards.Command;
-using Application.Features.FormTeam.Commands;
-using Application.Features.GameStarted.Commands;
-using Application.Features.GameStarted.Queries;
-using Application.Features.PickTrump.Commands;
-using Application.Features.PlayCard.Commands;
+﻿using Hokm.Application.DTOs;
+using Hokm.Application.Features.DealCards.Command;
+using Hokm.Application.Features.FormTeam.Commands;
+using Hokm.Application.Features.GameStarted.Commands;
+using Hokm.Application.Features.GameStarted.Queries;
+using Hokm.Application.Features.PickTrump.Commands;
+using Hokm.Application.Features.PlayCard.Commands;
 using Grpc.Core;
 using Hokm.Domain.Enums;
 using MediatR;
@@ -14,9 +14,11 @@ namespace Hokm.GrpcService.Services
     public class HokmGameService : Hokm.HokmGameService.HokmGameServiceBase
     {
         private readonly IMediator _mediator;
-        public HokmGameService(IMediator mediator)
+        private readonly GameStreamingService _streamingService;
+        public HokmGameService(IMediator mediator, GameStreamingService streamingService)
         {
             _mediator = mediator;
+            _streamingService = streamingService;
         }
 
         public override async Task<StartGameResponse> StartGame(StartGameRequest request, ServerCallContext context)
@@ -87,7 +89,26 @@ namespace Hokm.GrpcService.Services
                 CurrentRound = result.CurrentRound
             };
         }
+        public override async Task StreamGame(StreamRequest request, IServerStreamWriter<GameEvent> responseStream, ServerCallContext context)
+        {
+            var gameId = Guid.Parse(request.GameId);
+            var channel = _streamingService.Subscribe(gameId);
+            try
+            {
+                await foreach (var gameEvent in channel.Reader.ReadAllAsync(context.CancellationToken))
+                {
+                    await responseStream.WriteAsync(gameEvent,context.CancellationToken);
+                }
+            }
+            catch(OperationCanceledException)
+            {
 
+            }
+            finally
+            {
+                _streamingService.UnSubscribe(gameId,channel);
+            }
+        }
         private PlayerDto ToNewPlayer(string id, string name, string sideStr)
         {
             return new PlayerDto

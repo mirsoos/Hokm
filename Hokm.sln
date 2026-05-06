@@ -5,7 +5,7 @@ VisualStudioVersion = 17.14.37012.4 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hokm.Domain", "Hokm.Domain\Hokm.Domain.csproj", "{251D6354-309E-4B94-8DF8-F115E84240E2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Application", "Application\Application.csproj", "{123F93EE-EB38-4BF3-B4EA-2A659A0CA259}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hokm.Application", "Application\Hokm.Application.csproj", "{123F93EE-EB38-4BF3-B4EA-2A659A0CA259}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hokm.Infrastructure", "Hokm.Infrastructure\Hokm.Infrastructure.csproj", "{F37CFCBD-7DAA-4FA0-96D6-2CA26075C4C7}"
 EndProject

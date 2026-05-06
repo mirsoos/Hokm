@@ -1,7 +1,7 @@
-﻿using Application.DTOs;
+﻿using Hokm.Application.DTOs;
 using MediatR;
 
-namespace Application.Features.GameStarted.Commands
+namespace Hokm.Application.Features.GameStarted.Commands
 {
     public class StartGameCommand : IRequest<Guid>
     {

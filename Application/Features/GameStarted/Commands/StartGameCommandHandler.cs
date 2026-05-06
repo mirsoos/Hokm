@@ -1,8 +1,8 @@
 ﻿using Hokm.Domain.Entities;
-using Hokm.Domain.Interfaces;
+using Hokm.Application.Interfaces;
 using MediatR;
 
-namespace Application.Features.GameStarted.Commands
+namespace Hokm.Application.Features.GameStarted.Commands
 {
     public class StartGameCommandHandler : IRequestHandler<StartGameCommand, Guid>
     {
@@ -19,7 +19,7 @@ namespace Application.Features.GameStarted.Commands
             var player4 = new Player(request.Player4.PlayerId,request.Player4.Name,request.Player4.Side);
 
             var newGame = new Game(player1, player2, player3, player4);
-            await _gameRepository.SaveAsync(newGame);
+            await _gameRepository.SaveAsync(newGame,cancellationToken);
             return newGame.Id;
         }
     }

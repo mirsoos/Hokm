@@ -8,6 +8,9 @@ service HokmGameService {
   rpc PickTrump (PickTrumpRequest) returns (PickTrumpResponse);
   rpc PlayCard (PlayCardRequest) returns (PlayCardResponse);
   rpc GetGameState (GetGameStateRequest) returns (GameState);
+
+  rpc StreamGame (StreamRequest) returns (stream GameEvent);
+
 }
 
 message StartGameRequest {
@@ -75,4 +78,13 @@ message GameState {
   string game_id = 1;
   string status = 2;
   int32 current_round = 3;
+}
+
+message StreamRequest {
+  string game_id = 1;
+}
+
+message GameEvent {
+  string event_type = 1;
+  string payload = 2;
 }

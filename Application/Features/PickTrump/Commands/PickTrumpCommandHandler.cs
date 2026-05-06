@@ -1,8 +1,7 @@
-﻿using Hokm.Domain.Enums;
-using Hokm.Domain.Interfaces;
+﻿using Hokm.Application.Interfaces;
 using MediatR;
 
-namespace Application.Features.PickTrump.Commands
+namespace Hokm.Application.Features.PickTrump.Commands
 {
     public class PickTrumpCommandHandler : IRequestHandler<PickTrumpCommand, Unit>
     {
@@ -13,12 +12,12 @@ namespace Application.Features.PickTrump.Commands
         }
         public async Task<Unit> Handle(PickTrumpCommand request, CancellationToken cancellationToken)
         {
-            var currentGame = await _gameRepository.GetByIdAsync(request.GameId);
+            var currentGame = await _gameRepository.GetByIdAsync(request.GameId, cancellationToken);
             if(currentGame == null)
                 throw new ArgumentNullException("Game not found with Id",nameof(request.GameId));
 
             currentGame.SetTrumpForCurrentRound(request.TrumpSuit);
-            await _gameRepository.UpdateAsync(currentGame);
+            await _gameRepository.UpdateAsync(currentGame, cancellationToken);
             return Unit.Value;
         }
     }

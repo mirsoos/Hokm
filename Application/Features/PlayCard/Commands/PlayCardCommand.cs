@@ -1,7 +1,7 @@
 ﻿using Hokm.Domain.Enums;
 using MediatR;
 
-namespace Application.Features.PlayCard.Commands
+namespace Hokm.Application.Features.PlayCard.Commands
 {
     public class PlayCardCommand : IRequest<Unit>
     {

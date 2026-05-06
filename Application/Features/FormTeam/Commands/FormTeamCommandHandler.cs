@@ -1,10 +1,10 @@
-﻿using Application.DTOs;
+﻿using Hokm.Application.DTOs;
 using Hokm.Domain.Entities;
 using Hokm.Domain.Enums;
-using Hokm.Domain.Interfaces;
+using Hokm.Application.Interfaces;
 using MediatR;
 
-namespace Application.Features.FormTeam.Commands
+namespace Hokm.Application.Features.FormTeam.Commands
 {
     public class FormTeamCommandHandler : IRequestHandler<FormTeamCommand, FormedGamedDto>
     {
@@ -15,7 +15,7 @@ namespace Application.Features.FormTeam.Commands
         }
         public async Task<FormedGamedDto> Handle(FormTeamCommand request, CancellationToken cancellationToken)
         {
-            var currentGame = await _gameRepository.GetByIdAsync(request.GameId);
+            var currentGame = await _gameRepository.GetByIdAsync(request.GameId, cancellationToken);
             if (currentGame == null)
                 throw new ArgumentNullException("Game not found with Id.",nameof(request.GameId));
 
@@ -28,7 +28,7 @@ namespace Application.Features.FormTeam.Commands
             var redTeam = new Team(northPlayer.Id, southPlayer.Id, TeamSide.Red);
             var blueTeam = new Team(eastPlayer.Id, westPlayer.Id, TeamSide.Blue);
             currentGame.FormTeams(redTeam,blueTeam);
-            await _gameRepository.UpdateAsync(currentGame);
+            await _gameRepository.UpdateAsync(currentGame, cancellationToken);
             return new FormedGamedDto
             {
                 GameId = currentGame.Id,
