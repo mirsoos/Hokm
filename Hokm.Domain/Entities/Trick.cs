@@ -6,14 +6,14 @@ namespace Hokm.Domain.Entities
     public class Trick : BaseEntity
     {
         public Dictionary<Guid, Card> PlayedCards { get; private set; }
-        public Suit TrumpSuit { get; }
+        public Suit? TrumpSuit { get; }
         public Suit? LedSuit { get; private set; }
         public Guid? LeadPlayerId { get; }
         public Guid? WinnerPlayerId { get; private set; }
         public List<Guid> PlayerOrder { get; }
         public bool IsComplete => PlayedCards.Count == 4;
 
-        public Trick(Guid leadPlayer, Suit trumpSuit, List<Guid> playerOrder)
+        public Trick(Guid leadPlayer, Suit? trumpSuit, List<Guid> playerOrder)
         {
             LeadPlayerId = leadPlayer;
             TrumpSuit = trumpSuit;
@@ -48,7 +48,7 @@ namespace Hokm.Domain.Entities
             Card? bestCard = null;
             foreach (var entry in PlayedCards)
             {
-                if (bestCard == null || entry.Value.Beats(bestCard, TrumpSuit, LedSuit.Value))
+                if (bestCard == null || entry.Value.Beats(bestCard, TrumpSuit.Value, LedSuit.Value))
                 {
                     bestCard = entry.Value;
                     winnerId = entry.Key;

@@ -1,24 +1,30 @@
-﻿using Hokm.Application.DTOs;
+﻿using Grpc.Core;
+using Hokm.Application.DTOs;
 using Hokm.Application.Features.DealCards.Command;
 using Hokm.Application.Features.FormTeam.Commands;
 using Hokm.Application.Features.GameStarted.Commands;
 using Hokm.Application.Features.GameStarted.Queries;
 using Hokm.Application.Features.PickTrump.Commands;
 using Hokm.Application.Features.PlayCard.Commands;
-using Grpc.Core;
+using Hokm.Application.Features.Snapshot.Queries;
+using Hokm.Application.Realtime.Execution;
 using Hokm.Domain.Enums;
+using Hokm.GrpcService.Realtime;
 using MediatR;
+using System.Text.Json;
 
 namespace Hokm.GrpcService.Services
 {
     public class HokmGameService : Hokm.HokmGameService.HokmGameServiceBase
     {
-        private readonly IMediator _mediator;
+        private readonly GameExecutionCoordinator _coordinator;
         private readonly GameStreamingService _streamingService;
-        public HokmGameService(IMediator mediator, GameStreamingService streamingService)
+        private readonly IMediator _mediator;
+        public HokmGameService(GameExecutionCoordinator coordinator, GameStreamingService streamingService, IMediator mediator)
         {
-            _mediator = mediator;
+            _coordinator = coordinator;
             _streamingService = streamingService;
+            _mediator = mediator;
         }
 
         public override async Task<StartGameResponse> StartGame(StartGameRequest request, ServerCallContext context)
@@ -39,7 +45,10 @@ namespace Hokm.GrpcService.Services
             {
                 GameId = Guid.Parse(request.GameId)
             };
-            var result = await _mediator.Send(cmd);
+            var result = await _coordinator.ExecuteAsync(
+                cmd.GameId,
+                cmd,
+                context.CancellationToken);
             return new FormTeamsResponse { GameId = result.GameId.ToString() };
         }
         public override async Task<DealCardsResponse> DealCards(DealCardsRequest request, ServerCallContext context)
@@ -49,7 +58,10 @@ namespace Hokm.GrpcService.Services
                 DealerId = Guid.Parse(request.DealerId),
                 GameId = Guid.Parse(request.GameId)
             };
-            await _mediator.Send(cmd);
+            await _coordinator.ExecuteAsync(
+                cmd.GameId,
+                cmd,
+                context.CancellationToken);
             return new DealCardsResponse { Success = true };
         }
         public override async Task<PickTrumpResponse> PickTrump(PickTrumpRequest request, ServerCallContext context)
@@ -60,7 +72,10 @@ namespace Hokm.GrpcService.Services
                 GameId = Guid.Parse(request.GameId),
                 TrumpSuit = Enum.Parse<Suit>(request.TrumpSuit)
             };
-            await _mediator.Send(cmd);
+            await _coordinator.ExecuteAsync(
+                cmd.GameId,
+                cmd,
+                context.CancellationToken);
             return new PickTrumpResponse { Success = true };
         }
         public override async Task<PlayCardResponse> PlayCard(PlayCardRequest request, ServerCallContext context)
@@ -72,7 +87,10 @@ namespace Hokm.GrpcService.Services
                 Rank = Enum.Parse<Rank>(request.Rank),
                 Suit = Enum.Parse<Suit>(request.Suit)
             };
-            await _mediator.Send(cmd);
+            await _coordinator.ExecuteAsync(
+                cmd.GameId,
+                cmd,
+                context.CancellationToken);
             return new PlayCardResponse { Success = true };
         }
         public override async Task<GameState> GetGameState(GetGameStateRequest request, ServerCallContext context)
@@ -89,25 +107,39 @@ namespace Hokm.GrpcService.Services
                 CurrentRound = result.CurrentRound
             };
         }
-        public override async Task StreamGame(StreamRequest request, IServerStreamWriter<GameEvent> responseStream, ServerCallContext context)
+        public override async Task StreamGame(StreamRequest request,IServerStreamWriter<GameEvent> responseStream,ServerCallContext context)
         {
             var gameId = Guid.Parse(request.GameId);
-            var channel = _streamingService.Subscribe(gameId);
+            var playerId = Guid.Parse(request.PlayerId);
+            var subscription = _streamingService.Subscribe(gameId,playerId);
+
             try
             {
-                await foreach (var gameEvent in channel.Reader.ReadAllAsync(context.CancellationToken))
+                await foreach (var gameEvent in subscription.EventChannel.Reader.ReadAllAsync(context.CancellationToken))
                 {
                     await responseStream.WriteAsync(gameEvent,context.CancellationToken);
                 }
             }
-            catch(OperationCanceledException)
+            catch (OperationCanceledException)
             {
-
             }
             finally
             {
-                _streamingService.UnSubscribe(gameId,channel);
+                _streamingService.Unsubscribe(subscription);
             }
+        }
+        public override async Task<GameSnapshotResponse> GetSnapshot(GetSnapshotRequest request, ServerCallContext context)
+        {
+            var cmd = new GetGameSnapshotQuery
+            {
+                GameId = Guid.Parse(request.GameId),
+                PlayerId = Guid.Parse(request.PlayerId)
+            };
+            var result = await _mediator.Send(cmd);
+            return new GameSnapshotResponse
+            {
+                Payload = JsonSerializer.Serialize(result)
+            };
         }
         private PlayerDto ToNewPlayer(string id, string name, string sideStr)
         {

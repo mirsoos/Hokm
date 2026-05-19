@@ -3,8 +3,7 @@ namespace Hokm.Domain.Enums
 {
     public enum Suit
     {
-        Deciding = 1,
-        Clubs,
+        Clubs = 1,
         Diamonds,
         Hearts,
         Spades

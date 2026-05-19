@@ -16,5 +16,9 @@ namespace Hokm.Domain.Entities
         {
             RowVersion = Guid.NewGuid();
         }
+        protected BaseEntity(Guid? id = null)
+        {
+            Id = id ?? Guid.NewGuid();
+        }
     }
 }

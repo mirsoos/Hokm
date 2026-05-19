@@ -1,42 +1,117 @@
 ﻿using Hokm.Application.Events;
 using MediatR;
 using System.Collections.Concurrent;
-using System.Threading.Channels;
 
-namespace Hokm.GrpcService.Services
+namespace Hokm.GrpcService.Realtime
 {
-    public class GameStreamingService : INotificationHandler<GameEventNotification>
+    public sealed class GameStreamingService : INotificationHandler<GameEventNotification>
     {
-        private readonly ConcurrentDictionary<Guid, Channel<GameEvent>> _gameChannels = new();
-        public Channel<GameEvent> Subscribe(Guid gameId)
+        private readonly ConcurrentDictionary<Guid,List<GameSubscription>> _subscriptions = new();
+
+        public GameSubscription Subscribe(Guid gameId,Guid playerId)
         {
-            var channel = Channel.CreateUnbounded<GameEvent>();
-            _gameChannels[gameId] = channel;
-            return channel;
+            var subscription = new GameSubscription(gameId, playerId);
+
+            _subscriptions.AddOrUpdate(
+                gameId,
+                _ => new List<GameSubscription>
+                {
+                    subscription
+                },
+                (_, existing) =>
+                {
+                    lock (existing)
+                    {
+                        existing.Add(subscription);
+                        return existing;
+                    }
+                });
+
+            return subscription;
         }
-        public void UnSubscribe(Guid gameId, Channel<GameEvent> channel)
+
+        public void Unsubscribe(GameSubscription subscription)
         {
-            channel.Writer.Complete();
-            if (_gameChannels.TryGetValue(gameId, out var existing) && existing == channel)
+            subscription.EventChannel.Writer.Complete();
+
+            if (_subscriptions.TryGetValue(subscription.GameId,out var existing))
             {
-                _gameChannels.TryRemove(gameId, out _);
+                lock (existing)
+                {
+                    existing.RemoveAll(x => x.SubscriptionId == subscription.SubscriptionId);
+                    if (existing.Count == 0)
+                    {
+                        _subscriptions.TryRemove(
+                            subscription.GameId,
+                            out _);
+                    }
+                }
             }
         }
-        public async Task Handle(GameEventNotification notification, CancellationToken cancellationToken)
+
+        public async Task BroadcastAsync(Guid gameId,GameEvent gameEvent,CancellationToken cancellationToken)
         {
-            if(_gameChannels.TryGetValue(notification.GameId,out var channel))
+            if (!_subscriptions.TryGetValue(gameId,out var subscribers))
             {
-                var gameEvent = new GameEvent
-                {
-                    EventType = notification.EventType,
-                    Payload = notification.Payload
-                };
+                return;
+            }
+
+            List<GameSubscription> snapshot;
+
+            lock (subscribers)
+            {
+                snapshot = subscribers.ToList();
+            }
+
+            foreach (var subscription in snapshot)
+            {
                 try
                 {
-                    await channel.Writer.WriteAsync(gameEvent, cancellationToken);
+                    await subscription.EventChannel.Writer.WriteAsync(gameEvent,cancellationToken);
                 }
-                catch{ }
+                catch
+                {
+                }
             }
+        }
+
+        public async Task SendToPlayerAsync(Guid gameId,Guid playerId,GameEvent gameEvent,CancellationToken cancellationToken)
+        {
+            if (!_subscriptions.TryGetValue(gameId,out var subscribers))
+            {
+                return;
+            }
+
+            GameSubscription? target;
+
+            lock (subscribers)
+            {
+                target = subscribers.FirstOrDefault(x => x.PlayerId == playerId);
+            }
+
+            if (target == null)
+            {
+                return;
+            }
+
+            try
+            {
+                await target.EventChannel.Writer.WriteAsync(gameEvent,cancellationToken);
+            }
+            catch
+            {
+            }
+        }
+
+        public async Task Handle(GameEventNotification notification,CancellationToken cancellationToken)
+        {
+            var gameEvent = new GameEvent
+            {
+                EventType = notification.EventType,
+                Payload = notification.Payload
+            };
+
+            await BroadcastAsync(notification.GameId,gameEvent,cancellationToken);
         }
     }
 }

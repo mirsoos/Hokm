@@ -10,7 +10,6 @@ namespace Hokm.Domain.Entities
         public List<Round> Rounds { get; private set; }
         public GameStatus Status { get; private set; }
         public int? CurrentRoundIndex { get; private set; }
-        public int? CurrentTrickIndex { get; private set; }
 
 
         public Game(Player player1, Player player2, Player player3, Player player4)
@@ -20,7 +19,6 @@ namespace Hokm.Domain.Entities
             Rounds = new List<Round>();
             Status = GameStatus.WaitingForTeams;
             CurrentRoundIndex = null;
-            CurrentTrickIndex = null;
         }
 
         public void FormTeams(Team team1, Team team2)
@@ -46,25 +44,37 @@ namespace Hokm.Domain.Entities
             Status = GameStatus.TeamsReady;
         }
 
-        public void StartRoundAndDeal(Guid dealerId)
+        public Dictionary<Guid, List<Card>> StartRoundAndDeal(Guid dealerId)
         {
             if (Status != GameStatus.TeamsReady && Status != GameStatus.RoundFinished)
                 throw new InvalidOperationException("Game is not ready for a new round.");
-
+           
             var roundNumber = Rounds.Count + 1;
-            var round = new Round(roundNumber, dealerId);
+            var round = new Round(roundNumber,dealerId);
             Rounds.Add(round);
             CurrentRoundIndex = Rounds.Count - 1;
-
-            var deck = new Deck();
-            deck.Shuffle();
             foreach (var player in Players)
             {
-                var hand = deck.Deal(13);
-                round.PlayerHands[player.Id] = hand;
+                round.PlayerHands[player.Id] = new List<Card>();
             }
+            Status = GameStatus.DealingFirstFiveCards;
+            var order = GetTurnOrderForDeal(dealerId);
+            var dealtCards = round.DealCards(order, 5);
+            Status = GameStatus.WaitingForTrumpSelection;
+            return dealtCards;
+        }
 
-            Status = GameStatus.WaitingForTrump;
+        private List<Guid> GetTurnOrderForDeal(Guid dealerId)
+        {
+            var dealer = Players.First(x => x.Id == dealerId);
+
+            var firstSide = GetRightSideOf(dealer.PlayerSide);
+
+            var startIndex = ClockwiseOrder.IndexOf(firstSide);
+
+            var orderSides = Enumerable.Range(0, 4).Select(i => ClockwiseOrder[(startIndex + i) % 4]).ToList();
+
+            return orderSides.Select(side => Players.First(x => x.PlayerSide == side).Id).ToList();
         }
         public void StartNextRound()
         {
@@ -85,21 +95,29 @@ namespace Hokm.Domain.Entities
             }
         }
 
-        public void SetTrumpForCurrentRound(Suit trumpSuit)
+        public Dictionary<Guid, List<Card>> SetTrumpForCurrentRound(Suit trumpSuit)
         {
-            if (Status != GameStatus.WaitingForTrump || CurrentRoundIndex == null)
+            if (Status != GameStatus.WaitingForTrumpSelection || CurrentRoundIndex == null)
                 throw new InvalidOperationException("Game is not waiting for trump.");
-            var round = Rounds[CurrentRoundIndex.Value];
+
+            var round =Rounds[CurrentRoundIndex.Value];
             round.SetTrump(trumpSuit);
+            Status = GameStatus.DealingRemainingCards;
+            var order =GetTurnOrderForDeal(round.DealerId);
+            var secondFour =round.DealCards(order, 4);
+            var lastFour =round.DealCards(order, 4);
+            var allNewCards =new Dictionary<Guid, List<Card>>();
+            foreach (var playerId in secondFour.Keys)
+            {
+                allNewCards[playerId] =secondFour[playerId].Concat(lastFour[playerId]).ToList();
+            }
             Status = GameStatus.Playing;
-
-            var dealerId = round.DealerId;
-            var dealerSide = Players.First(p => p.Id == dealerId).PlayerSide;
-            var leadSide = GetRightSideOf(dealerSide);
-            var leadPlayerId = Players.First(p => p.PlayerSide == leadSide).Id;
-
-            var firstTrick = new Trick(leadPlayerId, trumpSuit, GetTurnOrderForTrick(leadPlayerId));
+            var dealer =Players.First(x =>x.Id == round.DealerId);
+            var leadSide =GetRightSideOf(dealer.PlayerSide);
+            var leadPlayerId =Players.First(x =>x.PlayerSide == leadSide).Id;
+            var firstTrick =new Trick(leadPlayerId,trumpSuit,GetTurnOrderForTrick(leadPlayerId));
             round.Tricks.Add(firstTrick);
+            return allNewCards;
         }
 
         public void EndGame()
@@ -139,22 +157,29 @@ namespace Hokm.Domain.Entities
             if (trick == null)
                 throw new InvalidOperationException("No active trick. Start a new trick first.");
 
-            // اعتبارسنجی نوبت و منطق بازی کارت داخل Trick انجام می‌شود
-            trick.PlayCard(playerId, card);
+            var playerHand = round.PlayerHands[playerId];
+            if (!playerHand.Contains(card))
+                throw new InvalidOperationException("Player does not own this card.");
 
-            // اگر تریک کامل شد
+            if (trick.LedSuit.HasValue && card.Suit != trick.LedSuit.Value)
+            {
+                var hasLedSuit = playerHand.Any(x => x.Suit == trick.LedSuit.Value);
+                if (hasLedSuit)
+                    throw new InvalidOperationException("Player must follow led suit.");
+            }
+
+            trick.PlayCard(playerId, card);
+            playerHand.Remove(card);
             if (trick.IsComplete)
             {
-                // اگر راند کامل شد (۱۳ تریک)
-                if (round.Tricks.Count == 13)  // تعداد کل تریک‌های یک دست حکم
+                if (round.Tricks.Count == 13) 
                 {
                     round.EndRound();
-                    // محاسبه تیم برنده راند
                     var winningTeamId = round.GetWinningTeamId(Teams);
                     if (winningTeamId != null)
                     {
                         var team = Teams.First(t => t.Id == winningTeamId.Value);
-                        team.AddScore(1); // هر راند ۱ امتیاز به تیم برنده
+                        team.AddScore(1);
                     }
 
                     if (Teams.Any(t => t.TotalScore >= 7))
@@ -163,18 +188,25 @@ namespace Hokm.Domain.Entities
                     }
                     else
                     {
-                        Status = GameStatus.RoundFinished;      // <-- اضافه شود
-                        CurrentRoundIndex = null;               // نیاز به فراخوانی دستی برای شروع راند بعدی
+                        Status = GameStatus.RoundFinished;
                     }
                 }
                 else
                 {
-                    // شروع تریک بعدی: لیدکننده آن برندهٔ تریک فعلی است
                     var nextLead = trick.WinnerPlayerId!.Value;
                     var newTrick = new Trick(nextLead, round.TrumpSuit, GetTurnOrderForTrick(nextLead));
                     round.Tricks.Add(newTrick);
                 }
             }
+        }
+
+        public Guid? GetCurrentTurnPlayerId()
+        {
+            if (CurrentTrick == null) return null;
+
+            if (CurrentTrick.IsComplete) return null;
+
+            return CurrentTrick.PlayerOrder[CurrentTrick.PlayedCards.Count];
         }
 
         private PlayerSide GetRightSideOf(PlayerSide side) => side switch

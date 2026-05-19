@@ -3,8 +3,7 @@ namespace Hokm.Domain.Enums
 {
     public enum Rank
     {
-        One = 1,
-        Two,
+        Two = 2,
         Three,
         Four,
         Five,
@@ -16,6 +15,6 @@ namespace Hokm.Domain.Enums
         Jack,
         Queen,
         King,
-        Ace
+        Ace = 14
     }
 }

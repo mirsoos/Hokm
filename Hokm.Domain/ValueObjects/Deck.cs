@@ -11,7 +11,6 @@ namespace Hokm.Domain.ValueObjects
             _cards = new List<Card>();
             foreach (Suit suit in Enum.GetValues(typeof(Suit)))
             {
-                if (suit == Suit.Deciding) continue;
                 foreach (Rank rank in Enum.GetValues(typeof(Rank)))
                 {
                     _cards.Add(new Card(suit, rank));

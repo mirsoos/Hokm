@@ -7,7 +7,8 @@ namespace Hokm.Domain.Entities
     {
         public int RoundNumber { get; private set; }
         public Guid DealerId { get; private set; }
-        public Suit TrumpSuit { get; private set; } = Suit.Deciding;
+        public Deck Deck { get; private set; }
+        public Suit? TrumpSuit { get; private set; }
         public List<Trick> Tricks { get; private set; }
         public bool IsFinished { get; private set; }
         public Dictionary<Guid, List<Card>> PlayerHands { get; private set; }
@@ -19,6 +20,8 @@ namespace Hokm.Domain.Entities
             Tricks = new List<Trick>();
             PlayerHands = new Dictionary<Guid, List<Card>>();
             IsFinished = false;
+            Deck = new Deck();
+            Deck.Shuffle();
         }
 
         public void EndRound()
@@ -27,10 +30,8 @@ namespace Hokm.Domain.Entities
         }
         public void SetTrump(Suit trumpSuit)
         {
-            if (TrumpSuit != Suit.Deciding)
+            if (TrumpSuit != null)
                 throw new InvalidOperationException("Trump has already been set.");
-            if (trumpSuit == Suit.Deciding)
-                throw new ArgumentException("Trump suit cannot be Deciding.");
             TrumpSuit = trumpSuit;
         }
         public Guid? GetWinningTeamId(List<Team> teams)
@@ -44,13 +45,24 @@ namespace Hokm.Domain.Entities
                 if (winnerTeam != null)
                     teamTrickCount[winnerTeam.Id]++;
             }
-            // در حکم، تیمی که ۷ تریک یا بیشتر برده باشد برنده راند است
             foreach (var kv in teamTrickCount)
             {
                 if (kv.Value >= 7)
                     return kv.Key;
             }
-            return null; // نباید رخ دهد ولی در صورت خطا
+            return null;
+        }
+
+        public Dictionary<Guid, List<Card>> DealCards(List<Guid> playerOrder,int count)
+        {
+            var result =new Dictionary<Guid, List<Card>>();
+            foreach (var playerId in playerOrder)
+            {
+                var cards = Deck.Deal(count);
+                PlayerHands[playerId].AddRange(cards);
+                result[playerId] = cards;
+            }
+            return result;
         }
 
     }

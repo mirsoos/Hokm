@@ -1,17 +1,18 @@
-﻿using Hokm.Infrastructure.Persistence.Mongo.Configurations;
+﻿using Hokm.Application.Interfaces;
+using Hokm.Application.Realtime.Execution;
+using Hokm.Infrastructure.Persistence.Mongo.Configurations;
 using Hokm.Infrastructure.Persistence.Mongo.Context;
-using Hokm.Application.Interfaces;
 using Hokm.Infrastructure.Repositories.Implementations;
+using Hokm.Infrastructure.Services.Redis.Implemetations;
+using Hokm.Infrastructure.Services.Redis.Interfaces;
+using MassTransit;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using MongoDB.Driver;
 using StackExchange.Redis;
-using MassTransit;
 using System.Text;
-using Hokm.Infrastructure.Services.Redis.Interfaces;
-using Hokm.Infrastructure.Services.Redis.Implemetations;
 
 namespace Hokm.Infrastructure.Configurations
 {
@@ -69,6 +70,8 @@ namespace Hokm.Infrastructure.Configurations
 
             services.AddScoped<IGameRepository, MongoGameRepository>();
             services.AddScoped<IRedisCacheService, RedisCacheService>();
+
+            services.AddSingleton<GameExecutionCoordinator>();
 
             return services;
         }
