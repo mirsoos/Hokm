@@ -1,0 +1,156 @@
+﻿syntax = "proto3";
+package hokm;
+
+service HokmGameService {
+    // پیوستن به صف جفت‌وجورسازی
+    rpc StartGame (StartGameRequest) returns (StartGameResponse);
+    // خروج ارادی از صف
+    rpc LeaveLobby (LeaveLobbyRequest) returns (LeaveLobbyResponse);
+    
+    // متدهای اصلی بازی حکم
+    rpc FormTeams (FormTeamsRequest) returns (FormTeamsResponse);
+    rpc DealCards (DealCardsRequest) returns (DealCardsResponse);
+    rpc PickTrump (PickTrumpRequest) returns (PickTrumpResponse);
+    rpc PlayCard (PlayCardRequest) returns (PlayCardResponse);
+    rpc GetGameState (GetGameStateRequest) returns (GameState);
+    rpc GetSnapshot (GetSnapshotRequest) returns (GameSnapshotResponse);
+    rpc SendInGameAction(InGameActionRequest) returns (InGameActionResponse);
+
+    // استریم مشترک برای دریافت رویدادهای لابی و داخل بازی
+    rpc StreamGame (StreamRequest) returns (stream GameEvent);
+
+    rpc StreamLobby(StreamRequest) returns (stream GameEvent); 
+
+}
+
+service UserService {
+    rpc UpdateProfile (UpdateProfileRequest) returns (UpdateProfileResponse);
+}
+
+message UpdateProfileRequest {
+    string full_name = 1;
+    string user_name = 2;
+    int32 avatar_ref = 3;    
+}
+
+message UpdateProfileResponse {
+    bool status = 1;
+}
+
+message UpdateUserStatsRequest {
+    string user_id = 1;
+    int32 score = 2;
+    bool is_win = 3;
+    TableKind table_kind = 4;
+    int32 coin = 5;
+    int32 kot = 6;
+    int32 hakem_kot = 7;
+    int32 round_won = 8;
+    int32 round_lost = 9;
+}
+
+message StartGameRequest {
+  string player_id = 1;
+  string player_name = 2;
+  TableKind table_kind = 3; 
+  int32 rounds = 4; // مشخص کردن تعداد راند مسابقه برای جفت‌وجورسازی دقیق
+}
+
+message StartGameResponse {
+  string game_id = 1; // این آیدی می‌تواند آیدی لابی موقت یا آیدی بازی واقعی باشد
+}
+
+message LeaveLobbyRequest {
+  string lobby_id = 1;
+  string player_id = 2;
+}
+
+message LeaveLobbyResponse {
+  bool success = 1;
+}
+
+message FormTeamsRequest {
+  string game_id = 1;
+}
+
+message FormTeamsResponse {
+  string game_id = 1;
+}
+
+message DealCardsRequest {
+  string game_id = 1;
+  string dealer_id = 2;
+}
+
+message DealCardsResponse {
+  bool success = 1;
+}
+
+message PickTrumpRequest {
+  string game_id = 1;
+  string trump_suit = 2;
+  string dealer_id = 3;
+}
+
+message PickTrumpResponse {
+  bool success = 1;
+}
+
+message PlayCardRequest {
+  string game_id = 1;
+  string player_id = 2;
+  string suit = 3;
+  string rank = 4;
+}
+
+message PlayCardResponse {
+  bool success = 1;
+}
+
+message GetGameStateRequest {
+  string game_id = 1;
+}
+
+message GetSnapshotRequest {
+  string game_id = 1;
+  string player_id = 2;
+}
+
+message GameSnapshotResponse {
+  string payload = 1;
+}
+
+message GameState {
+  string game_id = 1;
+  string status = 2;
+  int32 current_round = 3;
+}
+
+message StreamRequest {
+  string game_id = 1;
+  string player_id = 2;
+}
+
+message GameEvent {
+  string event_type = 1;
+  string payload = 2;
+}
+
+enum TableKind {
+    SPEEDY = 0;
+    ADVANCED = 1;
+    PRO = 2;
+    VIP = 3;
+    CUSTOM = 4;
+}
+
+message InGameActionRequest {
+  string gameId = 1;
+  string playerId = 2;
+  string actionType = 3;
+  string content = 4;
+}
+
+message InGameActionResponse {
+  bool success = 1;
+}

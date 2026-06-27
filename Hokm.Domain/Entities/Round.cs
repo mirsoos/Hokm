@@ -1,5 +1,6 @@
 ﻿using Hokm.Domain.Enums;
 using Hokm.Domain.ValueObjects;
+using System.Text.Json.Serialization;
 
 namespace Hokm.Domain.Entities
 {
@@ -56,15 +57,21 @@ namespace Hokm.Domain.Entities
         public Dictionary<Guid, List<Card>> DealCards(List<Guid> playerOrder,int count)
         {
             var result =new Dictionary<Guid, List<Card>>();
+
             foreach (var playerId in playerOrder)
             {
                 var cards = Deck.Deal(count);
+                if (!PlayerHands.ContainsKey(playerId))
+                {
+                    PlayerHands[playerId] = new List<Card>();
+                }
                 PlayerHands[playerId].AddRange(cards);
                 result[playerId] = cards;
             }
             return result;
         }
-
+        [JsonConstructor]
+        public Round() { }
     }
     
 }

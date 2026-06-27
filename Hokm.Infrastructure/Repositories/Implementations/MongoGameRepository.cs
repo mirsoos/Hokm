@@ -1,17 +1,18 @@
-﻿using Hokm.Domain.Entities;
+﻿using Hokm.Application.Features.Game.Queries.GetGameHistory;
 using Hokm.Application.Interfaces;
+using Hokm.Domain.Entities;
+using Hokm.Domain.Enums;
 using Hokm.Infrastructure.Persistence.Mongo.Context;
-using MongoDB.Driver;
-using Hokm.Infrastructure.Services.Redis.Interfaces;
 using Hokm.Infrastructure.Services.Redis.Constants;
+using MongoDB.Driver;
 
 namespace Hokm.Infrastructure.Repositories.Implementations
 {
     public class MongoGameRepository : IGameRepository
     {
         private readonly MongoDbContext _mongoDb;
-        private readonly IRedisCacheService _redisCache;
-        public MongoGameRepository(MongoDbContext mongoDb , IRedisCacheService redisCache)
+        private readonly Services.Redis.Interfaces.IRedisCacheService _redisCache;
+        public MongoGameRepository(MongoDbContext mongoDb , Services.Redis.Interfaces.IRedisCacheService redisCache)
         {
             _mongoDb = mongoDb;
             _redisCache = redisCache;
@@ -24,15 +25,47 @@ namespace Hokm.Infrastructure.Repositories.Implementations
 
         public async Task<Game> GetByIdAsync(Guid gameId, CancellationToken cancellationToken)
         {
-            var key = RedisCacheKeySchema.GameKey(gameId);
-            var cached = await _redisCache.GetAsync<Game>(key,cancellationToken);
-            if (cached != null)
-                return cached;
+            //var key = RedisCacheKeySchema.GameKey(gameId);
+            //var cached = await _redisCache.GetAsync<Game>(key,cancellationToken);
+            //if (cached != null)
+            //    return cached;
             
             var game = await _mongoDb.Games.Find(x => x.Id == gameId).FirstOrDefaultAsync(cancellationToken);
-            if(game != null)
-            await _redisCache.SetAsync<Game>(key,game,TimeSpan.FromHours(1), cancellationToken);
+            //if(game != null)
+            //await _redisCache.SetAsync<Game>(key,game,TimeSpan.FromHours(1), cancellationToken);
             return game;
+        }
+
+        public async Task<List<GameHistoryItem>?> GetHistoryByUserIdAsync(Guid userId, int take, CancellationToken cancellationToken)
+        {
+
+            var filter = Builders<Game>.Filter.ElemMatch(
+                g => g.Players,
+                p => p.UserId == userId
+            ) & Builders<Game>.Filter.Eq(g => g.Status, GameStatus.Finished);
+
+            var games = await _mongoDb.Games
+                .Find(filter)
+                .SortByDescending(g => g.CreateDate)
+                .Limit(take)
+                .ToListAsync(cancellationToken);
+
+            if (games == null || games.Count == 0)
+                return null;
+
+            return games.Select(game =>
+            {
+                bool isWin = game.WinnerPlayers.Contains(userId);
+                var opponent = game.Players.FirstOrDefault(p => p.UserId != userId);
+
+                return new GameHistoryItem(
+                    GameId: game.Id,
+                    Date: game.CreateDate.ToString("yyyy/MM/dd"),
+                    IsWin: isWin,
+                    ScoreChange: 0,
+                    OpponentName: opponent?.Name ?? "ناشناس"
+                );
+            }).ToList();
         }
 
         public async Task<Game> SaveAsync(Game game, CancellationToken cancellationToken)

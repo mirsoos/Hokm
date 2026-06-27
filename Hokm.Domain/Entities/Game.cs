@@ -1,16 +1,25 @@
 ﻿using Hokm.Domain.Enums;
 using Hokm.Domain.ValueObjects;
+using System.Text.Json.Serialization;
 
 namespace Hokm.Domain.Entities
 {
     public class Game : BaseEntity
     {
+        [JsonInclude]
         public List<Player> Players { get; private set; }
+        [JsonInclude]
         public List<Team> Teams { get; private set; }
+        [JsonInclude]
         public List<Round> Rounds { get; private set; }
+        [JsonInclude]
         public GameStatus Status { get; private set; }
+        [JsonInclude]
         public int? CurrentRoundIndex { get; private set; }
-
+        [JsonInclude]
+        public Guid? LastTrickWinnerPlayerId { get; private set; }
+        [JsonInclude]
+        public List<Guid> WinnerPlayers { get; private set; }
 
         public Game(Player player1, Player player2, Player player3, Player player4)
         {
@@ -48,9 +57,9 @@ namespace Hokm.Domain.Entities
         {
             if (Status != GameStatus.TeamsReady && Status != GameStatus.RoundFinished)
                 throw new InvalidOperationException("Game is not ready for a new round.");
-           
+
             var roundNumber = Rounds.Count + 1;
-            var round = new Round(roundNumber,dealerId);
+            var round = new Round(roundNumber, dealerId);
             Rounds.Add(round);
             CurrentRoundIndex = Rounds.Count - 1;
             foreach (var player in Players)
@@ -67,27 +76,40 @@ namespace Hokm.Domain.Entities
         private List<Guid> GetTurnOrderForDeal(Guid dealerId)
         {
             var dealer = Players.First(x => x.Id == dealerId);
-
             var firstSide = GetRightSideOf(dealer.PlayerSide);
-
-            var startIndex = ClockwiseOrder.IndexOf(firstSide);
-
-            var orderSides = Enumerable.Range(0, 4).Select(i => ClockwiseOrder[(startIndex + i) % 4]).ToList();
-
+            var startIndex = CounterClockwiseOrder.IndexOf(firstSide);
+            var orderSides = Enumerable.Range(0, 4).Select(i => CounterClockwiseOrder[(startIndex + i) % 4]).ToList();
             return orderSides.Select(side => Players.First(x => x.PlayerSide == side).Id).ToList();
         }
-        public void StartNextRound()
+        public Dictionary<Guid, List<Card>> StartNextRound()
         {
             if (Status != GameStatus.RoundFinished)
                 throw new InvalidOperationException("Game is not in a state to start the next round.");
-            if (CurrentRoundIndex == null && Rounds.Any())
+
+            if (Rounds.Any())
             {
                 var lastRound = Rounds.Last();
-                var lastDealer = Players.First(p => p.Id == lastRound.DealerId);
-                var newDealerSide = GetRightSideOf(lastDealer.PlayerSide);
-                var newDealer = Players.First(p => p.PlayerSide == newDealerSide);
 
-                StartRoundAndDeal(newDealer.Id);
+                var winningTeamId = lastRound.GetWinningTeamId(Teams);
+
+                var lastDealer = Players.First(p => p.Id == lastRound.DealerId);
+                var lastHakemSide = GetRightSideOf(lastDealer.PlayerSide);
+                var lastHakem = Players.First(p => p.PlayerSide == lastHakemSide);
+                var lastHakemTeamId = Teams.First(t => t.PlayerIds.Contains(lastHakem.Id)).Id;
+
+                Guid newDealerId;
+
+                if (winningTeamId == lastHakemTeamId)
+                {
+                    newDealerId = lastRound.DealerId;
+                }
+                else
+                {
+                    var newDealerSide = GetRightSideOf(lastDealer.PlayerSide);
+                    newDealerId = Players.First(p => p.PlayerSide == newDealerSide).Id;
+                }
+
+                return StartRoundAndDeal(newDealerId);
             }
             else
             {
@@ -95,27 +117,34 @@ namespace Hokm.Domain.Entities
             }
         }
 
-        public Dictionary<Guid, List<Card>> SetTrumpForCurrentRound(Suit trumpSuit)
+        public Dictionary<Guid, List<Card>> SetTrumpForCurrentRound(Suit trumpSuit, Guid hakemId)
         {
             if (Status != GameStatus.WaitingForTrumpSelection || CurrentRoundIndex == null)
                 throw new InvalidOperationException("Game is not waiting for trump.");
 
-            var round =Rounds[CurrentRoundIndex.Value];
+            var round = Rounds[CurrentRoundIndex.Value];
+
+            var dealer = Players.First(x => x.Id == round.DealerId);
+            var hakemSide = GetRightSideOf(dealer.PlayerSide);
+            var expectedHakemId = Players.First(x => x.PlayerSide == hakemSide).Id;
+
+            if (expectedHakemId != hakemId)
+                throw new InvalidOperationException("Only the Hakem can select trump.");
+
             round.SetTrump(trumpSuit);
             Status = GameStatus.DealingRemainingCards;
-            var order =GetTurnOrderForDeal(round.DealerId);
-            var secondFour =round.DealCards(order, 4);
-            var lastFour =round.DealCards(order, 4);
-            var allNewCards =new Dictionary<Guid, List<Card>>();
+            var order = GetTurnOrderForDeal(round.DealerId);
+            var secondFour = round.DealCards(order, 4);
+            var lastFour = round.DealCards(order, 4);
+            var allNewCards = new Dictionary<Guid, List<Card>>();
             foreach (var playerId in secondFour.Keys)
             {
-                allNewCards[playerId] =secondFour[playerId].Concat(lastFour[playerId]).ToList();
+                allNewCards[playerId] = secondFour[playerId].Concat(lastFour[playerId]).ToList();
             }
             Status = GameStatus.Playing;
-            var dealer =Players.First(x =>x.Id == round.DealerId);
-            var leadSide =GetRightSideOf(dealer.PlayerSide);
-            var leadPlayerId =Players.First(x =>x.PlayerSide == leadSide).Id;
-            var firstTrick =new Trick(leadPlayerId,trumpSuit,GetTurnOrderForTrick(leadPlayerId));
+
+            var leadPlayerId = hakemId;
+            var firstTrick = new Trick(leadPlayerId, trumpSuit, GetTurnOrderForTrick(leadPlayerId));
             round.Tricks.Add(firstTrick);
             return allNewCards;
         }
@@ -131,21 +160,21 @@ namespace Hokm.Domain.Entities
         private List<Guid> GetTurnOrderForTrick(Guid leadPlayerId)
         {
             var leadSide = Players.First(p => p.Id == leadPlayerId).PlayerSide;
-            var startIdx = ClockwiseOrder.IndexOf(leadSide);
+            var startIdx = CounterClockwiseOrder.IndexOf(leadSide);
             var orderSides = Enumerable.Range(0, 4)
-                .Select(i => ClockwiseOrder[(startIdx + i) % 4])
+                .Select(i => CounterClockwiseOrder[(startIdx + i) % 4])
                 .ToList();
             return orderSides.Select(side => Players.First(p => p.PlayerSide == side).Id).ToList();
         }
 
-        private static readonly List<PlayerSide> ClockwiseOrder = new()
-            { PlayerSide.North, PlayerSide.East, PlayerSide.South, PlayerSide.West };
+        private static readonly List<PlayerSide> CounterClockwiseOrder = new()
+            { PlayerSide.North, PlayerSide.West, PlayerSide.South, PlayerSide.East };
 
-        private Trick? CurrentTrick =>
-            CurrentRoundIndex.HasValue ? Rounds[CurrentRoundIndex.Value].Tricks.LastOrDefault(t => !t.IsComplete) : null;
+        private Trick? CurrentTrick => CurrentRoundIndex.HasValue ? Rounds[CurrentRoundIndex.Value].Tricks.LastOrDefault(t => !t.IsComplete) : null;
 
         public void PlayCard(Guid playerId, Card card)
         {
+            LastTrickWinnerPlayerId = null;
             if (Status != GameStatus.Playing)
                 throw new InvalidOperationException("Game is not in playing state.");
             if (!CurrentRoundIndex.HasValue)
@@ -156,6 +185,9 @@ namespace Hokm.Domain.Entities
 
             if (trick == null)
                 throw new InvalidOperationException("No active trick. Start a new trick first.");
+
+            if (!round.PlayerHands.ContainsKey(playerId))
+                throw new InvalidOperationException("Player not found in round.");
 
             var playerHand = round.PlayerHands[playerId];
             if (!playerHand.Contains(card))
@@ -170,17 +202,30 @@ namespace Hokm.Domain.Entities
 
             trick.PlayCard(playerId, card);
             playerHand.Remove(card);
+
             if (trick.IsComplete)
             {
-                if (round.Tricks.Count == 13) 
+                LastTrickWinnerPlayerId = trick.WinnerPlayerId;
+
+                int team1Tricks = 0;
+                int team2Tricks = 0;
+
+                if (Teams.Count >= 2)
+                {
+                    var team1 = Teams[0];
+                    var team2 = Teams[1];
+
+                    team1Tricks = round.Tricks.Count(t => t.IsComplete && t.WinnerPlayerId.HasValue && team1.PlayerIds.Contains(t.WinnerPlayerId.Value));
+                    team2Tricks = round.Tricks.Count(t => t.IsComplete && t.WinnerPlayerId.HasValue && team2.PlayerIds.Contains(t.WinnerPlayerId.Value));
+                }
+
+                if (team1Tricks >= 7 || team2Tricks >= 7)
                 {
                     round.EndRound();
-                    var winningTeamId = round.GetWinningTeamId(Teams);
-                    if (winningTeamId != null)
-                    {
-                        var team = Teams.First(t => t.Id == winningTeamId.Value);
-                        team.AddScore(1);
-                    }
+
+                    var winningTeamId = team1Tricks >= 7 ? Teams[0].Id : Teams[1].Id;
+                    var team = Teams.First(t => t.Id == winningTeamId);
+                    team.AddScore(1);
 
                     if (Teams.Any(t => t.TotalScore >= 7))
                     {
@@ -200,6 +245,37 @@ namespace Hokm.Domain.Entities
             }
         }
 
+        public bool IsCardPlayable(Guid playerId, Card card)
+        {
+            if (Status != GameStatus.Playing || !CurrentRoundIndex.HasValue)
+                return false;
+
+            if (GetCurrentTurnPlayerId() != playerId)
+                return false;
+
+            var round = Rounds[CurrentRoundIndex.Value];
+            var trick = round.Tricks.LastOrDefault(t => !t.IsComplete);
+            if (trick == null)
+                return false;
+
+            if (!round.PlayerHands.ContainsKey(playerId))
+                return false;
+
+            var playerHand = round.PlayerHands[playerId];
+
+            if (!playerHand.Contains(card))
+                return false;
+
+            if (trick.LedSuit.HasValue && card.Suit != trick.LedSuit.Value)
+            {
+                var hasLedSuit = playerHand.Any(x => x.Suit == trick.LedSuit.Value);
+                if (hasLedSuit)
+                    return false;
+            }
+
+            return true;
+        }
+
         public Guid? GetCurrentTurnPlayerId()
         {
             if (CurrentTrick == null) return null;
@@ -209,14 +285,15 @@ namespace Hokm.Domain.Entities
             return CurrentTrick.PlayerOrder[CurrentTrick.PlayedCards.Count];
         }
 
-        private PlayerSide GetRightSideOf(PlayerSide side) => side switch
+        public PlayerSide GetRightSideOf(PlayerSide side) => side switch
         {
-            PlayerSide.North => PlayerSide.East,
-            PlayerSide.East => PlayerSide.South,
-            PlayerSide.South => PlayerSide.West,
-            PlayerSide.West => PlayerSide.North,
+            PlayerSide.North => PlayerSide.West,
+            PlayerSide.West => PlayerSide.South,
+            PlayerSide.South => PlayerSide.East,
+            PlayerSide.East => PlayerSide.North,
             _ => throw new ArgumentOutOfRangeException()
         };
-
+        [JsonConstructor]
+        public Game() { }
     }    
 }

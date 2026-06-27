@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:latest
+    container_name: hokm_mongo
+    command: mongod --replSet rs0 --bind_ip_all --port 27017
+    ports:
+      - '27018:27017' # پورت بیرون دیتابیس مانگو
+    volumes:
+      - hokm_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --port 27017 --eval 'try { rs.status() } catch(e) { rs.initiate({ _id: \"rs0\", members: [{ _id: 0, host: \"localhost:27017\" }] }) }'"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  redis:
+    image: redis:alpine
+    container_name: hokm_redis
+    ports:
+      - '16380:6379' # پورت بیرون ردیس
+    command: redis-server --appendonly yes
+    volumes:
+      - hokm_redis_data:/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: hokm_rabbitmq
+    ports:
+      - '5673:5672' # پورت بیرون به 5673 تغییر کرد
+      - '15673:15672' # پورت پنل به 15673 تغییر کرد
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+volumes:
+  hokm_mongo_data:
+  hokm_redis_data:

@@ -8,6 +8,7 @@ namespace Hokm.Domain.Entities
         public Guid UserId { get; set; }
         public Guid TeamId { get; private set; }
         public PlayerSide PlayerSide { get; private set; }
+        public int AvatarRef { get; private set; } = 1;
 
         public Player(Guid id, string name , PlayerSide playerSide) : base(id)
         {

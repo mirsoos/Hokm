@@ -1,16 +1,17 @@
 ﻿using Hokm.Domain.Enums;
 using Hokm.Domain.ValueObjects;
+using System.Text.Json.Serialization;
 
 namespace Hokm.Domain.Entities
 {
     public class Trick : BaseEntity
     {
         public Dictionary<Guid, Card> PlayedCards { get; private set; }
-        public Suit? TrumpSuit { get; }
+        public Suit? TrumpSuit { get; private set; }
         public Suit? LedSuit { get; private set; }
-        public Guid? LeadPlayerId { get; }
+        public Guid? LeadPlayerId { get; private set; }
         public Guid? WinnerPlayerId { get; private set; }
-        public List<Guid> PlayerOrder { get; }
+        public List<Guid> PlayerOrder { get; private set; }
         public bool IsComplete => PlayedCards.Count == 4;
 
         public Trick(Guid leadPlayer, Suit? trumpSuit, List<Guid> playerOrder)
@@ -56,5 +57,8 @@ namespace Hokm.Domain.Entities
             }
             WinnerPlayerId = winnerId;
         }
+
+        [JsonConstructor]
+        public Trick() { }
     }
 }

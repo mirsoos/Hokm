@@ -1,5 +1,8 @@
 ﻿using Hokm.Infrastructure.Persistence.Mongo.Configurations.EntityConfigurations;
 using System.Reflection;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 
 namespace Hokm.Infrastructure.Persistence.Mongo.Configurations
 {
@@ -13,6 +16,16 @@ namespace Hokm.Infrastructure.Persistence.Mongo.Configurations
             lock (_lock)
             {
                 if (_isConfigured) return;
+
+                // ۱. ثبت سراسری سریالایزر شناسه‌ها به صورت String در اولین خط (قبل از بارگذاری هر کلاس‌مپی)
+                try
+                {
+                    BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+                }
+                catch (BsonSerializationException)
+                {
+                    // اگر در فرآیندهای موازی قبلاً ثبت شده باشد، بدون خطا عبور کند
+                }
 
                 MongoDbConventionRegistry.Configure();
 
@@ -45,6 +58,14 @@ namespace Hokm.Infrastructure.Persistence.Mongo.Configurations
             lock (_lock)
             {
                 if (_isConfigured) return;
+
+                try
+                {
+                    BsonSerializer.RegisterSerializer(new GuidSerializer(BsonType.String));
+                }
+                catch (BsonSerializationException)
+                {
+                }
 
                 MongoDbConventionRegistry.Configure();
                 BaseEntityConfiguration.Configure();

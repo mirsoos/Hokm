@@ -1,41 +1,52 @@
-﻿using Hokm.Domain.Enums;
+﻿// Deck.cs
+using Hokm.Domain.Enums;
+using System.Text.Json.Serialization;
 
 namespace Hokm.Domain.ValueObjects
 {
     public class Deck
     {
-        private List<Card> _cards;
+        [JsonInclude]
+        public List<Card> Cards { get; private set; }
 
         public Deck()
         {
-            _cards = new List<Card>();
+            Cards = new List<Card>();
             foreach (Suit suit in Enum.GetValues(typeof(Suit)))
             {
                 foreach (Rank rank in Enum.GetValues(typeof(Rank)))
                 {
-                    _cards.Add(new Card(suit, rank));
+                    Cards.Add(new Card(suit, rank));
                 }
             }
         }
 
+        [JsonConstructor]
+        public Deck(List<Card> cards)
+        {
+            Cards = cards ?? new List<Card>();
+        }
+
         public void Shuffle()
         {
-            var rng = new Random();
-            int n = _cards.Count;
+            int n = Cards.Count;
             while (n > 1)
             {
                 n--;
-                int k = rng.Next(n + 1);
-                (_cards[k], _cards[n]) = (_cards[n], _cards[k]);
+                int k = Random.Shared.Next(n + 1);
+                (Cards[k], Cards[n]) = (Cards[n], Cards[k]);
             }
         }
 
         public List<Card> Deal(int count)
         {
-            if (count > _cards.Count)
+            if (count > Cards.Count)
                 throw new InvalidOperationException("Not enough cards in deck.");
-            var dealt = _cards.Take(count).ToList();
-            _cards = _cards.Skip(count).ToList();
+
+            var dealt = Cards.Take(count).ToList();
+
+            Cards.RemoveRange(0, count);
+
             return dealt;
         }
     }

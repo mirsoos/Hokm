@@ -5,7 +5,7 @@ namespace Hokm.Domain.Entities
     {
         public string FullName { get; private set; }
         public string UserName { get; private set; }
-        public string? PhoneNumber { get; private set; }
+        public string PhoneNumber { get; private set; }
         public string? Email { get; private set; }
         public string? RefreshToken { get; private set; }
         public DateTime? TokenExpireDate { get; private set; }
@@ -17,14 +17,20 @@ namespace Hokm.Domain.Entities
         public int TotalGames => Wins + Loses;
         public long Coin { get; private set; } = 1000;
 
-        public User(string fullname , string email, string phoneNumber , string userName)
+        public User(string fullname , string? email, string phoneNumber , string userName)
         {
-            if (string.IsNullOrWhiteSpace(phoneNumber) && string.IsNullOrWhiteSpace(email))
-                throw new ArgumentNullException("PhoneNumber or Email Required.");
             Email = email;
             FullName = fullname;
             PhoneNumber = phoneNumber;
             UserName = userName;
+        }
+
+        public void UpdateFullName(string fullName)
+        {
+            if (string.IsNullOrWhiteSpace(fullName))
+                throw new ArgumentNullException(nameof(fullName));
+
+            FullName = fullName;
         }
 
         public void SetUserToken(string refreshToken)
@@ -32,5 +38,6 @@ namespace Hokm.Domain.Entities
             RefreshToken = refreshToken;
             TokenExpireDate = DateTime.UtcNow;
         }
+        public User() { }
     }
 }

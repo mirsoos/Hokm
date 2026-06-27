@@ -14,7 +14,7 @@ namespace Hokm.Infrastructure.Persistence.Mongo.Configurations.EntityConfigurati
                 BsonClassMap.RegisterClassMap<BaseEntity>(cm =>
                 {
                     cm.AutoMap();
-                    cm.MapMember(be => be.Id).SetSerializer(new GuidSerializer(GuidRepresentation.Standard));
+                    cm.MapIdMember(be => be.Id).SetSerializer(new GuidSerializer(GuidRepresentation.Standard));
                     cm.MapMember(be => be.RowVersion).SetSerializer(new GuidSerializer(GuidRepresentation.Standard));
                     cm.MapMember(be => be.CreateDate).SetSerializer(new DateTimeSerializer(DateTimeKind.Utc));
                     cm.SetIgnoreExtraElements(true);

@@ -6,7 +6,7 @@ using MongoDB.Bson.Serialization.Serializers;
 
 namespace Hokm.Infrastructure.Persistence.Mongo.Configurations.EntityConfigurations
 {
-    internal class TeamConfiguration : IEntityConfiguration
+    public class TeamConfiguration : IEntityConfiguration
     { 
         private static bool _isConfigured = false;
         public void Configure()
