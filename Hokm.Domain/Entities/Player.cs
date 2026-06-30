@@ -9,6 +9,8 @@ namespace Hokm.Domain.Entities
         public Guid TeamId { get; private set; }
         public PlayerSide PlayerSide { get; private set; }
         public int AvatarRef { get; private set; } = 1;
+        public bool IsAutoPlay { get; private set; } = false;
+
 
         public Player(Guid id, string name , PlayerSide playerSide) : base(id)
         {
@@ -19,6 +21,8 @@ namespace Hokm.Domain.Entities
             PlayerSide = playerSide;
         }
         public void AssignToTeam(Guid teamId) => TeamId = teamId;
+        public void EnableAutoPlay() => IsAutoPlay = true;
+        public void DisableAutoPlay() => IsAutoPlay = false;
     }
 
 }

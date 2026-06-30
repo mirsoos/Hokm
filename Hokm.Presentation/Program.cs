@@ -1,4 +1,5 @@
-﻿using Hokm.Infrastructure.Configurations;
+﻿using Hokm.Application.Realtime.Execution;
+using Hokm.Infrastructure.Configurations;
 using Hokm.Presentation.gRPC.Services;
 using MediatR;
 using Microsoft.OpenApi.Models;
@@ -13,27 +14,15 @@ builder.WebHost.ConfigureKestrel(options =>
 
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// ثبت GameStreamingService به عنوان Singleton
 builder.Services.AddSingleton<GameStreamingService>();
+builder.Services.AddSingleton<GameTimerManager>();
 
-// بازگرداندن MediatR
 builder.Services.AddMediatR(cfg =>
 {
-    // اسکن اسمبلی Application
     cfg.RegisterServicesFromAssembly(typeof(Hokm.Application.Features.RegisterUser.Commands.SendVerificationCode.SendVerificationCodeCommand).Assembly);
-
-    // استفاده از ServiceFactory پیش‌فرض که از DI خودمان می‌خواند
-    // این خط باعث می‌شود MediatR برای پیدا کردن هندلرها از ServiceProvider ما استفاده کند
-    // و در نتیجه همان GameStreamingService ای که ما Singleton کردیم را پیدا می‌کند.
-    cfg.Lifetime = ServiceLifetime.Transient; // (اختیاری) ولی مهم نیست
+    cfg.Lifetime = ServiceLifetime.Transient;
 });
-// MediatR به طور پیش‌فرض از ServiceProvider اصلی استفاده می‌کند.
-// پس وقتی GameStreamingService را به عنوان INotificationHandler ثبت کرده باشیم،
-// خودش آن را از DI پیدا می‌کند.
 
-// ثبت GameStreamingService به عنوان هندلر برای MediatR
-// این کار باعث می‌شود MediatR بفهمد که برای INotificationHandler<GameEventNotification>
-// باید از GameStreamingService استفاده کند، بدون اینکه نمونه جدید بسازد.
 builder.Services.AddSingleton<INotificationHandler<Hokm.Application.Events.GameEventNotification>>(sp => sp.GetRequiredService<GameStreamingService>());
 builder.Services.AddSingleton<INotificationHandler<Hokm.Application.Events.PlayerGameEventNotification>>(sp => sp.GetRequiredService<GameStreamingService>());
 

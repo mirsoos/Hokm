@@ -97,7 +97,8 @@ namespace Hokm.Application.Features.Snapshot.Queries
                         Side = player.PlayerSide.ToString(),
                         IsHakem = hakem.Id == player.Id,
                         Avatar = user.AvatarRef,
-                        CardCount = cardCount
+                        CardCount = cardCount,
+                        IsAutoPlay = player.IsAutoPlay
                     });
                 }
             }

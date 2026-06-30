@@ -14,5 +14,6 @@ namespace Hokm.Application.DTOs.GameSnapshot
         public bool IsHakem { get; set; }
         public int Avatar { get; set; } = 1;
         public int CardCount { get; set; }
+        public bool IsAutoPlay { get; set; }
     }
 }

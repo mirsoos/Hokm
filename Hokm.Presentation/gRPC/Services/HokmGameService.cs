@@ -1,5 +1,7 @@
 ﻿using Grpc.Core;
 using Hokm.Application.DTOs;
+using Hokm.Application.Features.AutoPlay.Commands.EnableAutoPlay;
+using Hokm.Application.Features.AutoPlay.Commands.ResumeControl;
 using Hokm.Application.Features.DealCards.Command;
 using Hokm.Application.Features.FormTeam.Commands;
 using Hokm.Application.Features.GameStarted.Commands;
@@ -481,6 +483,21 @@ namespace Hokm.Presentation.gRPC.Services
                 })
             };
             await _streamingService.BroadcastAsync(gameId, statusEvent, CancellationToken.None);
+
+            var enableAutoPlayCmd = new EnableAutoPlayCommand(gameId, playerId);
+            await _coordinator.ExecuteAsync(gameId, enableAutoPlayCmd, CancellationToken.None);
+        }
+
+        public override async Task<ResumeControlResponse> ResumeControl(ResumeControlRequest request, ServerCallContext context)
+        {
+            var cmd = new ResumeControlCommand(
+                Guid.Parse(request.GameId),
+                Guid.Parse(request.PlayerId)
+            );
+
+            await _coordinator.ExecuteAsync(cmd.GameId, cmd, context.CancellationToken);
+
+            return new ResumeControlResponse { Success = true };
         }
 
         public override async Task<InGameActionResponse> SendInGameAction(InGameActionRequest request, ServerCallContext context)

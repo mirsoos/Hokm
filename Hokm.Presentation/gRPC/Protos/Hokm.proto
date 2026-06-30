@@ -16,6 +16,8 @@ service HokmGameService {
     rpc GetSnapshot (GetSnapshotRequest) returns (GameSnapshotResponse);
     rpc SendInGameAction(InGameActionRequest) returns (InGameActionResponse);
 
+    rpc ResumeControl (ResumeControlRequest) returns (ResumeControlResponse);
+
     // استریم مشترک برای دریافت رویدادهای لابی و داخل بازی
     rpc StreamGame (StreamRequest) returns (stream GameEvent);
 
@@ -152,5 +154,14 @@ message InGameActionRequest {
 }
 
 message InGameActionResponse {
+  bool success = 1;
+}
+
+message ResumeControlRequest {
+  string game_id = 1;
+  string player_id = 2;
+}
+
+message ResumeControlResponse {
   bool success = 1;
 }

@@ -56,9 +56,9 @@ namespace Hokm.Application.Realtime.Execution
 
                     await envelope.ExecuteAsync(scope.ServiceProvider);
                 }
-                catch
+                catch(Exception ex)
                 {
-
+                    Console.WriteLine($"❌ خطا در پردازش تسک بازی: {ex}");
                 }
             }
         }
