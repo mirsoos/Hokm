@@ -13,6 +13,7 @@ namespace Hokm.Application.Interfaces
         Task<bool> ExistByIdAsync(Guid userId, CancellationToken cancellationToken);
         Task UpdateAvatarAsync(Guid userId,int avatarRef , CancellationToken cancellationToken);
         Task<List<User>> GetFirstFourUsersAsync(CancellationToken cancellationToken);
-
+        Task<bool> DeductCoinsAsync(List<Guid> userIds, int amount, CancellationToken cancellationToken);
+        Task<List<User>> GetRandomBotsAsync(int count, List<Guid> excludeUserIds, CancellationToken cancellationToken);
     }
 }

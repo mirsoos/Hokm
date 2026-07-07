@@ -25,7 +25,7 @@ namespace Hokm.Application.Features.GameStarted.Commands
             var player3 = new Player(request.Player3.PlayerId, request.Player3.Name, PlayerSide.North);
             var player4 = new Player(request.Player4.PlayerId, request.Player4.Name, PlayerSide.East);
 
-            var newGame = new Domain.Entities.Game(player1, player2, player3, player4);
+            var newGame = new Domain.Entities.Game(player1, player2, player3, player4, request.TableKind);
             await _gameRepository.SaveAsync(newGame, cancellationToken);
 
             return newGame.Id;

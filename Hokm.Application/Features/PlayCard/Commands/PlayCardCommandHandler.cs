@@ -1,7 +1,9 @@
-﻿using Hokm.Application.DTOs;
+﻿using Hokm.Application.Constants;
+using Hokm.Application.DTOs;
 using Hokm.Application.DTOs.GameSnapshot;
 using Hokm.Application.Events;
 using Hokm.Application.Interfaces;
+using Hokm.Application.Realtime.Execution;
 using Hokm.Domain.Enums;
 using Hokm.Domain.ValueObjects;
 using MediatR;
@@ -13,11 +15,13 @@ namespace Hokm.Application.Features.PlayCard.Commands
     {
         private readonly IGameRepository _gameRepository;
         private readonly IMediator _mediator;
+        private readonly GameTimerManager _timerManager;
 
-        public PlayCardCommandHandler(IGameRepository gameRepository, IMediator mediator)
+        public PlayCardCommandHandler(IGameRepository gameRepository, IMediator mediator, GameTimerManager timerManager)
         {
             _gameRepository = gameRepository;
             _mediator = mediator;
+            _timerManager = timerManager;
         }
 
         public async Task<Unit> Handle(PlayCardCommand request, CancellationToken cancellationToken)
@@ -27,6 +31,8 @@ namespace Hokm.Application.Features.PlayCard.Commands
             if (currentGame == null)
                 throw new ArgumentNullException(nameof(request.GameId), "Game not found.");
 
+            _timerManager.CancelTimer(currentGame.Id);
+
             var card = new Card(request.Suit, request.Rank);
 
             currentGame.PlayCard(request.PlayerId, card);
@@ -35,7 +41,20 @@ namespace Hokm.Application.Features.PlayCard.Commands
 
             Guid? nextPlayerId = null;
             if (currentGame.Status == GameStatus.Playing)
+            {
                 nextPlayerId = currentGame.GetCurrentTurnPlayerId();
+
+                if (nextPlayerId.HasValue)
+                {
+                    var nextPlayer = currentGame.Players.First(p => p.Id == nextPlayerId.Value);
+
+                    double timeoutSeconds = nextPlayer.IsAutoPlay
+                        ? GameConstants.BotTurnTimeoutSeconds
+                        : GameConstants.HumanTurnTimeoutSeconds;
+
+                    _timerManager.StartTimer(currentGame.Id, nextPlayerId.Value, timeoutSeconds);
+                }
+            }
 
             await _mediator.Publish(new GameEventNotification(
                 request.GameId,
@@ -140,6 +159,13 @@ namespace Hokm.Application.Features.PlayCard.Commands
                 var dealer = currentGame.Players.First(x => x.Id == newActiveRound.DealerId);
                 var hakemSide = currentGame.GetRightSideOf(dealer.PlayerSide);
                 var newHakemId = currentGame.Players.First(x => x.PlayerSide == hakemSide).Id;
+
+                var newHakem = currentGame.Players.First(p => p.Id == newHakemId);
+                double timeoutSeconds = newHakem.IsAutoPlay
+                    ? GameConstants.BotTurnTimeoutSeconds
+                    : GameConstants.HumanTurnTimeoutSeconds;
+
+                _timerManager.StartTimer(currentGame.Id, newHakemId, timeoutSeconds, isTrumpSelection: true);
 
                 foreach (var player in currentGame.Players)
                 {

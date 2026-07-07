@@ -71,5 +71,59 @@ namespace Hokm.Infrastructure.Repositories.Implementations
                 .Limit(4)
                 .ToListAsync(cancellationToken);
         }
+
+        public async Task<bool> DeductCoinsAsync(List<Guid> userIds, int amount, CancellationToken cancellationToken)
+        {
+            using (var session = await _mongoDb.Users.Database.Client.StartSessionAsync(cancellationToken: cancellationToken))
+            {
+                session.StartTransaction();
+
+                try
+                {
+                    var bulkOps = userIds.Select(userId => new UpdateOneModel<User>(
+                        Builders<User>.Filter.And(
+                            Builders<User>.Filter.Eq(u => u.Id, userId),
+                            Builders<User>.Filter.Gte(u => u.Coin, amount)
+                        ),
+                        Builders<User>.Update.Inc(u => u.Coin, -amount)
+                    )).ToList();
+
+                    var result = await _mongoDb.Users.BulkWriteAsync(
+                        session,
+                        bulkOps,
+                        new BulkWriteOptions { IsOrdered = false },
+                        cancellationToken: cancellationToken
+                    );
+
+                    if (result.ModifiedCount != userIds.Count)
+                    {
+                        throw new InvalidOperationException("یک یا چند کاربر موجودی کافی ندارند یا یافت نشدند.");
+                    }
+
+                    await session.CommitTransactionAsync(cancellationToken);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    await session.AbortTransactionAsync(cancellationToken);
+
+                    Console.WriteLine($"خطا در تراکنش کسر سکه گروهی: {ex.Message}");
+                    return false;
+                }
+            }
+        }
+
+        public async Task<List<User>> GetRandomBotsAsync(int count, List<Guid> excludeUserIds, CancellationToken cancellationToken)
+        {
+            var filter = Builders<User>.Filter.And(
+                Builders<User>.Filter.Eq(u => u.IsBot, true),
+                Builders<User>.Filter.Nin(u => u.Id, excludeUserIds)
+            );
+
+            return await _mongoDb.Users.Aggregate()
+                .Match(filter)
+                .Sample(count)
+                .ToListAsync(cancellationToken);
+        }
     }
 }

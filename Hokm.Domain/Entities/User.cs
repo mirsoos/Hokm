@@ -16,6 +16,7 @@ namespace Hokm.Domain.Entities
         public int Loses { get; private set; } = 0;
         public int TotalGames => Wins + Loses;
         public long Coin { get; private set; } = 1000;
+        public bool IsBot { get; set; } = false;
 
         public User(string fullname , string? email, string phoneNumber , string userName)
         {
@@ -31,6 +32,13 @@ namespace Hokm.Domain.Entities
                 throw new ArgumentNullException(nameof(fullName));
 
             FullName = fullName;
+        }
+
+        public void DeductCoins(int amount)
+        {
+            if (Coin < amount)
+                throw new InvalidOperationException("موجودی سکه کافی نیست.");
+            Coin -= amount;
         }
 
         public void SetUserToken(string refreshToken)

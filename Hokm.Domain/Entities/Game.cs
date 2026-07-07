@@ -20,14 +20,18 @@ namespace Hokm.Domain.Entities
         public Guid? LastTrickWinnerPlayerId { get; private set; }
         [JsonInclude]
         public List<Guid> WinnerPlayers { get; private set; }
+        public TableKind TableKind { get; set; }
+        public int TargetRounds { get; private set; }
 
-        public Game(Player player1, Player player2, Player player3, Player player4)
+        public Game(Player player1, Player player2, Player player3, Player player4,TableKind tableKind)
         {
             Players = new List<Player> { player1, player2, player3, player4 };
             Teams = new List<Team>();
             Rounds = new List<Round>();
             Status = GameStatus.WaitingForTeams;
             CurrentRoundIndex = null;
+            TableKind = tableKind;
+            TargetRounds = DetermineTargetRounds(tableKind);
         }
 
         public void FormTeams(Team team1, Team team2)
@@ -117,6 +121,27 @@ namespace Hokm.Domain.Entities
             }
         }
 
+        public void StartPlaying()
+        {
+            if (Status == GameStatus.Playing)
+                return;
+
+            if (Status != GameStatus.DealingRemainingCards)
+                throw new InvalidOperationException("Game is not in dealing cards state.");
+
+            Status = GameStatus.Playing;
+
+            var round = Rounds[CurrentRoundIndex!.Value];
+
+            var dealer = Players.First(x => x.Id == round.DealerId);
+            var hakemSide = GetRightSideOf(dealer.PlayerSide);
+            var hakemId = Players.First(x => x.PlayerSide == hakemSide).Id;
+
+            var leadPlayerId = hakemId;
+            var firstTrick = new Trick(leadPlayerId, round.TrumpSuit!.Value, GetTurnOrderForTrick(leadPlayerId));
+            round.Tricks.Add(firstTrick);
+        }
+
         public Dictionary<Guid, List<Card>> SetTrumpForCurrentRound(Suit trumpSuit, Guid hakemId)
         {
             if (Status != GameStatus.WaitingForTrumpSelection || CurrentRoundIndex == null)
@@ -132,7 +157,9 @@ namespace Hokm.Domain.Entities
                 throw new InvalidOperationException("Only the Hakem can select trump.");
 
             round.SetTrump(trumpSuit);
+
             Status = GameStatus.DealingRemainingCards;
+
             var order = GetTurnOrderForDeal(round.DealerId);
             var secondFour = round.DealCards(order, 4);
             var lastFour = round.DealCards(order, 4);
@@ -141,11 +168,6 @@ namespace Hokm.Domain.Entities
             {
                 allNewCards[playerId] = secondFour[playerId].Concat(lastFour[playerId]).ToList();
             }
-            Status = GameStatus.Playing;
-
-            var leadPlayerId = hakemId;
-            var firstTrick = new Trick(leadPlayerId, trumpSuit, GetTurnOrderForTrick(leadPlayerId));
-            round.Tricks.Add(firstTrick);
             return allNewCards;
         }
 
@@ -227,7 +249,7 @@ namespace Hokm.Domain.Entities
                     var team = Teams.First(t => t.Id == winningTeamId);
                     team.AddScore(1);
 
-                    if (Teams.Any(t => t.TotalScore >= 7))
+                    if (Teams.Any(t => t.TotalScore >= TargetRounds))
                     {
                         EndGame();
                     }
@@ -247,7 +269,24 @@ namespace Hokm.Domain.Entities
 
         public bool IsCardPlayable(Guid playerId, Card card)
         {
-            if (Status != GameStatus.Playing || !CurrentRoundIndex.HasValue)
+            if (!CurrentRoundIndex.HasValue)
+                return false;
+
+            if (Status == GameStatus.DealingRemainingCards)
+            {
+                var activeRound = Rounds[CurrentRoundIndex.Value];
+
+                var dealer = Players.First(x => x.Id == activeRound.DealerId);
+                var hakemSide = GetRightSideOf(dealer.PlayerSide);
+                var hakemId = Players.First(x => x.PlayerSide == hakemSide).Id;
+
+                if (playerId != hakemId)
+                    return false;
+
+                return activeRound.PlayerHands[playerId].Contains(card);
+            }
+
+            if (Status != GameStatus.Playing)
                 return false;
 
             if (GetCurrentTurnPlayerId() != playerId)
@@ -284,6 +323,15 @@ namespace Hokm.Domain.Entities
 
             return CurrentTrick.PlayerOrder[CurrentTrick.PlayedCards.Count];
         }
+
+        private int DetermineTargetRounds(TableKind tableKind) => tableKind switch
+        {
+            TableKind.Bot => 1,
+            TableKind.Speedy => 3,
+            TableKind.Pro => 5,
+            TableKind.Vip => 7,
+            _ => 3,
+        };
 
         public PlayerSide GetRightSideOf(PlayerSide side) => side switch
         {

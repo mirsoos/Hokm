@@ -1,7 +1,10 @@
-﻿using Hokm.Application.Features.PlayCard.Commands;
+﻿using Hokm.Application.Events;
+using Hokm.Application.Features.PlayCard.Commands;
+using Hokm.Application.Features.Snapshot.Queries;
 using Hokm.Application.Interfaces;
 using Hokm.Application.Realtime.Bot;
 using MediatR;
+using System.Text.Json;
 
 namespace Hokm.Application.Features.AutoPlay.Commands.AutoPlay
 {
@@ -19,24 +22,19 @@ namespace Hokm.Application.Features.AutoPlay.Commands.AutoPlay
 
         public async Task<Unit> Handle(AutoPlayCardCommand request, CancellationToken cancellationToken)
         {
-            // ۱. خواندن وضعیت بازی از دیتابیس
             var game = await _gameRepository.GetByIdAsync(request.GameId, cancellationToken);
             if (game == null) return Unit.Value;
 
-            // ۲. بررسی امنیتی: اگر به هر دلیلی نوبت بازی تغییر کرده بود، عملیات را لغو کن
             if (game.GetCurrentTurnPlayerId() != request.PlayerId)
                 return Unit.Value;
 
-            // ۳. فعال کردن حالت اتوپلی برای بازیکن (چون تایم‌اوت شده یا قطع شده است)
             var player = game.Players.First(p => p.Id == request.PlayerId);
             player.EnableAutoPlay();
             await _gameRepository.UpdateAsync(game, cancellationToken);
 
-            // ۴. دریافت کارت پیشنهادی ربات باهوشمان
             var chosenCard = HokmBot.DecideCardToPlay(game, request.PlayerId);
             if (chosenCard == null) return Unit.Value;
 
-            // ۵. اجرای دستور بازی کردن کارت (استفاده مجدد از کدی که خودتان نوشته‌اید)
             var playCardCmd = new PlayCardCommand
             {
                 GameId = game.Id,
@@ -45,8 +43,24 @@ namespace Hokm.Application.Features.AutoPlay.Commands.AutoPlay
                 Rank = chosenCard.Rank
             };
 
-            // ارسال دستور به هندلر شما برای ثبت کارت، ارسال رویدادها به فلاتر و تعیین نوبت بعدی
             await _mediator.Send(playCardCmd, cancellationToken);
+
+            await _mediator.Publish(new GameEventNotification(
+                game.Id,
+                "player_status_changed",
+                JsonSerializer.Serialize(new { PlayerId = request.PlayerId.ToString(), IsOnline = true, IsAutoPlay = true })
+            ), cancellationToken);
+
+
+            var snapshotQuery = new GetGameSnapshotQuery { GameId = game.Id, PlayerId = request.PlayerId };
+            var snapshot = await _mediator.Send(snapshotQuery, cancellationToken);
+
+            await _mediator.Publish(new PlayerGameEventNotification(
+                game.Id,
+                request.PlayerId,
+                "game_state_updated",
+                JsonSerializer.Serialize(new { GameState = snapshot })
+            ), cancellationToken);
 
             return Unit.Value;
         }

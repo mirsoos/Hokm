@@ -15,6 +15,7 @@ service HokmGameService {
     rpc GetGameState (GetGameStateRequest) returns (GameState);
     rpc GetSnapshot (GetSnapshotRequest) returns (GameSnapshotResponse);
     rpc SendInGameAction(InGameActionRequest) returns (InGameActionResponse);
+    rpc ReadyToPlay (ReadyToPlayRequest) returns (ReadyToPlayResponse);
 
     rpc ResumeControl (ResumeControlRequest) returns (ResumeControlResponse);
 
@@ -139,11 +140,10 @@ message GameEvent {
 }
 
 enum TableKind {
-    SPEEDY = 0;
-    ADVANCED = 1;
+    BOT = 0;
+    SPEEDY = 1;
     PRO = 2;
     VIP = 3;
-    CUSTOM = 4;
 }
 
 message InGameActionRequest {
@@ -163,5 +163,14 @@ message ResumeControlRequest {
 }
 
 message ResumeControlResponse {
+  bool success = 1;
+}
+
+message ReadyToPlayRequest {
+  string game_id = 1;
+  string player_id = 2;
+}
+
+message ReadyToPlayResponse {
   bool success = 1;
 }
