@@ -15,5 +15,7 @@ namespace Hokm.Application.DTOs.GameSnapshot
         public int Avatar { get; set; } = 1;
         public int CardCount { get; set; }
         public bool IsAutoPlay { get; set; }
+        public string CardSkin { get; set; } = "default";
+        public string BoardTheme { get; set; } = "default";
     }
 }

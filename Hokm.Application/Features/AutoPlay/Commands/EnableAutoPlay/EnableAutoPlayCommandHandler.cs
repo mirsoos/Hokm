@@ -1,7 +1,7 @@
 ﻿using Hokm.Application.Events;
-using Hokm.Application.Features.Snapshot.Queries;
 using Hokm.Application.Interfaces;
 using Hokm.Application.Realtime.Execution;
+using Hokm.Domain.Enums;
 using MediatR;
 using System.Text.Json;
 
@@ -13,7 +13,10 @@ namespace Hokm.Application.Features.AutoPlay.Commands.EnableAutoPlay
         private readonly GameTimerManager _timerManager;
         private readonly IMediator _mediator;
 
-        public EnableAutoPlayCommandHandler(IGameRepository gameRepository, GameTimerManager timerManager, IMediator mediator)
+        public EnableAutoPlayCommandHandler(
+            IGameRepository gameRepository,
+            GameTimerManager timerManager,
+            IMediator mediator)
         {
             _gameRepository = gameRepository;
             _timerManager = timerManager;
@@ -31,26 +34,35 @@ namespace Hokm.Application.Features.AutoPlay.Commands.EnableAutoPlay
                 player.EnableAutoPlay();
                 await _gameRepository.UpdateAsync(game, cancellationToken);
 
-                if (game.GetCurrentTurnPlayerId() == request.PlayerId)
-                {
-                    _timerManager.StartTimer(game.Id, request.PlayerId, 1.0);
-                }
-
                 await _mediator.Publish(new GameEventNotification(
                     game.Id,
                     "player_status_changed",
                     JsonSerializer.Serialize(new { PlayerId = request.PlayerId.ToString(), IsOnline = false, IsAutoPlay = true })
                 ), cancellationToken);
 
-                var snapshotQuery = new GetGameSnapshotQuery { GameId = game.Id, PlayerId = request.PlayerId };
-                var snapshot = await _mediator.Send(snapshotQuery, cancellationToken);
+                bool isTrumpPhase = game.Status == GameStatus.WaitingForTeams ||
+                                    game.Status == GameStatus.TeamsReady ||
+                                    (game.CurrentRoundIndex.HasValue && !game.Rounds[game.CurrentRoundIndex.Value].TrumpSuit.HasValue);
 
-                await _mediator.Publish(new PlayerGameEventNotification(
-                    game.Id,
-                    request.PlayerId,
-                    "game_state_updated",
-                    JsonSerializer.Serialize(new { GameState = snapshot })
-                ), cancellationToken);
+                if (isTrumpPhase)
+                {
+                    if (game.CurrentRoundIndex.HasValue)
+                    {
+                        var activeRound = game.Rounds[game.CurrentRoundIndex.Value];
+                        var dealer = game.Players.First(x => x.Id == activeRound.DealerId);
+                        var hakemSide = game.GetRightSideOf(dealer.PlayerSide);
+                        var hakem = game.Players.First(x => x.PlayerSide == hakemSide);
+
+                        if (hakem.Id == request.PlayerId)
+                        {
+                            await _timerManager.StartTimer(game.Id, request.PlayerId, 1.0, isTrumpSelection: true);
+                        }
+                    }
+                }
+                else if (game.Status == GameStatus.Playing && game.GetCurrentTurnPlayerId() == request.PlayerId)
+                {
+                    await _timerManager.StartTimer(game.Id, request.PlayerId, 1.0, isTrumpSelection: false);
+                }
             }
             return Unit.Value;
         }

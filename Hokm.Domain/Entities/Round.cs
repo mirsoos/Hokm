@@ -8,16 +8,18 @@ namespace Hokm.Domain.Entities
     {
         public int RoundNumber { get; private set; }
         public Guid DealerId { get; private set; }
+        public Guid HakemId { get; private set; }
         public Deck Deck { get; private set; }
         public Suit? TrumpSuit { get; private set; }
         public List<Trick> Tricks { get; private set; }
         public bool IsFinished { get; private set; }
         public Dictionary<Guid, List<Card>> PlayerHands { get; private set; }
 
-        public Round(int roundNumber, Guid dealerId)
+        public Round(int roundNumber, Guid dealerId, Guid hakemId)
         {
             RoundNumber = roundNumber;
             DealerId = dealerId;
+            HakemId = hakemId;
             Tricks = new List<Trick>();
             PlayerHands = new Dictionary<Guid, List<Card>>();
             IsFinished = false;
@@ -29,12 +31,14 @@ namespace Hokm.Domain.Entities
         {
             IsFinished = true;
         }
+
         public void SetTrump(Suit trumpSuit)
         {
             if (TrumpSuit != null)
                 throw new InvalidOperationException("Trump has already been set.");
             TrumpSuit = trumpSuit;
         }
+
         public Guid? GetWinningTeamId(List<Team> teams)
         {
             if (!IsFinished) throw new InvalidOperationException("Round is not finished.");
@@ -54,9 +58,9 @@ namespace Hokm.Domain.Entities
             return null;
         }
 
-        public Dictionary<Guid, List<Card>> DealCards(List<Guid> playerOrder,int count)
+        public Dictionary<Guid, List<Card>> DealCards(List<Guid> playerOrder, int count)
         {
-            var result =new Dictionary<Guid, List<Card>>();
+            var result = new Dictionary<Guid, List<Card>>();
 
             foreach (var playerId in playerOrder)
             {
@@ -70,8 +74,8 @@ namespace Hokm.Domain.Entities
             }
             return result;
         }
+
         [JsonConstructor]
         public Round() { }
     }
-    
 }

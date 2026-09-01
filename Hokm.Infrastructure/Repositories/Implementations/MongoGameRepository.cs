@@ -12,12 +12,16 @@ namespace Hokm.Infrastructure.Repositories.Implementations
     {
         private readonly MongoDbContext _mongoDb;
         private readonly Services.Redis.Interfaces.IRedisCacheService _redisCache;
-        public MongoGameRepository(MongoDbContext mongoDb , Services.Redis.Interfaces.IRedisCacheService redisCache)
+        private readonly IUserRepository _userRepository; // اضافه شد
+
+        public MongoGameRepository(MongoDbContext mongoDb, Services.Redis.Interfaces.IRedisCacheService redisCache, IUserRepository userRepository)
         {
             _mongoDb = mongoDb;
             _redisCache = redisCache;
+            _userRepository = userRepository; // اضافه شد
         }
-        public async Task<bool> ExistsAsync(Guid gameId , CancellationToken cancellationToken)
+
+        public async Task<bool> ExistsAsync(Guid gameId, CancellationToken cancellationToken)
         {
             var cursor = await _mongoDb.Games.Find(x => x.Id == gameId).Limit(1).ToCursorAsync(cancellationToken);
             return await cursor.AnyAsync();
@@ -29,7 +33,7 @@ namespace Hokm.Infrastructure.Repositories.Implementations
             //var cached = await _redisCache.GetAsync<Game>(key,cancellationToken);
             //if (cached != null)
             //    return cached;
-            
+
             var game = await _mongoDb.Games.Find(x => x.Id == gameId).FirstOrDefaultAsync(cancellationToken);
             //if(game != null)
             //await _redisCache.SetAsync<Game>(key,game,TimeSpan.FromHours(1), cancellationToken);
@@ -38,7 +42,6 @@ namespace Hokm.Infrastructure.Repositories.Implementations
 
         public async Task<List<GameHistoryItem>?> GetHistoryByUserIdAsync(Guid userId, int take, CancellationToken cancellationToken)
         {
-
             var filter = Builders<Game>.Filter.ElemMatch(
                 g => g.Players,
                 p => p.UserId == userId
@@ -80,7 +83,27 @@ namespace Hokm.Infrastructure.Repositories.Implementations
         {
             var key = RedisCacheKeySchema.GameKey(game.Id);
             await _mongoDb.Games.ReplaceOneAsync(x => x.Id == game.Id, game, cancellationToken: cancellationToken);
-            await _redisCache.RemoveAsync(key,cancellationToken);
+            await _redisCache.RemoveAsync(key, cancellationToken);
+        }
+
+        public async Task<bool> IsGameActiveWithHumanPlayersAsync(Guid gameId, CancellationToken cancellationToken)
+        {
+            var game = await GetByIdAsync(gameId, cancellationToken);
+
+            if (game == null || game.Status == GameStatus.Finished)
+                return false;
+
+            foreach (var player in game.Players)
+            {
+                var user = await _userRepository.GetByIdAsync(player.UserId, cancellationToken);
+
+                if (user != null && !user.IsBot && !player.IsAutoPlay)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

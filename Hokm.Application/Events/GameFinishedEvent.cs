@@ -6,5 +6,6 @@ namespace Hokm.Application.Events
     {
         public Guid? WinnerTeamId { get; set; }
         public List<TeamScoreDto> FinalScores { get; set; }
+        public long Reward { get; set; }
     }
 }

@@ -11,6 +11,8 @@ namespace Hokm.Infrastructure.Persistence.Mongo.Context
         private readonly IMongoDatabase _database;
         public IMongoCollection<Game> Games => _database.GetCollection<Game>("Games");
         public IMongoCollection<User> Users => _database.GetCollection<User>("Users");
+        public IMongoCollection<Product> Products => _database.GetCollection<Product>("Products");
+        public IMongoCollection<Transaction> Transactions => _database.GetCollection<Transaction>("Transactions");
 
         static MongoDbContext()
         {

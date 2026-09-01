@@ -29,5 +29,10 @@ namespace Hokm.Application.Realtime.Execution
                 CompletionSource.TrySetException(ex);
             }
         }
+
+        public void TrySetException(Exception ex)
+        {
+            CompletionSource.TrySetException(ex);
+        }
     }
 }

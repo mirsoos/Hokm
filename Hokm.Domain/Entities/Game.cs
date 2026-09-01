@@ -57,26 +57,6 @@ namespace Hokm.Domain.Entities
             Status = GameStatus.TeamsReady;
         }
 
-        public Dictionary<Guid, List<Card>> StartRoundAndDeal(Guid dealerId)
-        {
-            if (Status != GameStatus.TeamsReady && Status != GameStatus.RoundFinished)
-                throw new InvalidOperationException("Game is not ready for a new round.");
-
-            var roundNumber = Rounds.Count + 1;
-            var round = new Round(roundNumber, dealerId);
-            Rounds.Add(round);
-            CurrentRoundIndex = Rounds.Count - 1;
-            foreach (var player in Players)
-            {
-                round.PlayerHands[player.Id] = new List<Card>();
-            }
-            Status = GameStatus.DealingFirstFiveCards;
-            var order = GetTurnOrderForDeal(dealerId);
-            var dealtCards = round.DealCards(order, 5);
-            Status = GameStatus.WaitingForTrumpSelection;
-            return dealtCards;
-        }
-
         private List<Guid> GetTurnOrderForDeal(Guid dealerId)
         {
             var dealer = Players.First(x => x.Id == dealerId);
@@ -93,27 +73,29 @@ namespace Hokm.Domain.Entities
             if (Rounds.Any())
             {
                 var lastRound = Rounds.Last();
-
                 var winningTeamId = lastRound.GetWinningTeamId(Teams);
 
-                var lastDealer = Players.First(p => p.Id == lastRound.DealerId);
-                var lastHakemSide = GetRightSideOf(lastDealer.PlayerSide);
-                var lastHakem = Players.First(p => p.PlayerSide == lastHakemSide);
-                var lastHakemTeamId = Teams.First(t => t.PlayerIds.Contains(lastHakem.Id)).Id;
+                var lastHakemTeamId = Teams.First(t => t.PlayerIds.Contains(lastRound.HakemId)).Id;
 
                 Guid newDealerId;
+                Guid newHakemId;
 
                 if (winningTeamId == lastHakemTeamId)
                 {
                     newDealerId = lastRound.DealerId;
+                    newHakemId = lastRound.HakemId;
                 }
                 else
                 {
+                    var lastDealer = Players.First(p => p.Id == lastRound.DealerId);
                     var newDealerSide = GetRightSideOf(lastDealer.PlayerSide);
                     newDealerId = Players.First(p => p.PlayerSide == newDealerSide).Id;
+
+                    var newHakemSide = GetRightSideOf(newDealerSide);
+                    newHakemId = Players.First(p => p.PlayerSide == newHakemSide).Id;
                 }
 
-                return StartRoundAndDeal(newDealerId);
+                return StartRoundAndDeal(newDealerId, newHakemId);
             }
             else
             {
@@ -133,13 +115,32 @@ namespace Hokm.Domain.Entities
 
             var round = Rounds[CurrentRoundIndex!.Value];
 
-            var dealer = Players.First(x => x.Id == round.DealerId);
-            var hakemSide = GetRightSideOf(dealer.PlayerSide);
-            var hakemId = Players.First(x => x.PlayerSide == hakemSide).Id;
+            var leadPlayerId = round.HakemId;
 
-            var leadPlayerId = hakemId;
             var firstTrick = new Trick(leadPlayerId, round.TrumpSuit!.Value, GetTurnOrderForTrick(leadPlayerId));
             round.Tricks.Add(firstTrick);
+        }
+
+        public Dictionary<Guid, List<Card>> StartRoundAndDeal(Guid dealerId, Guid hakemId)
+        {
+            if (Status != GameStatus.TeamsReady && Status != GameStatus.RoundFinished)
+                throw new InvalidOperationException("Game is not ready for a new round.");
+
+            var roundNumber = Rounds.Count + 1;
+            var round = new Round(roundNumber, dealerId, hakemId);
+            Rounds.Add(round);
+            CurrentRoundIndex = Rounds.Count - 1;
+
+            foreach (var player in Players)
+            {
+                round.PlayerHands[player.Id] = new List<Card>();
+            }
+
+            Status = GameStatus.DealingFirstFiveCards;
+            var order = GetTurnOrderForDeal(dealerId);
+            var dealtCards = round.DealCards(order, 5);
+            Status = GameStatus.WaitingForTrumpSelection;
+            return dealtCards;
         }
 
         public Dictionary<Guid, List<Card>> SetTrumpForCurrentRound(Suit trumpSuit, Guid hakemId)
@@ -149,11 +150,7 @@ namespace Hokm.Domain.Entities
 
             var round = Rounds[CurrentRoundIndex.Value];
 
-            var dealer = Players.First(x => x.Id == round.DealerId);
-            var hakemSide = GetRightSideOf(dealer.PlayerSide);
-            var expectedHakemId = Players.First(x => x.PlayerSide == hakemSide).Id;
-
-            if (expectedHakemId != hakemId)
+            if (round.HakemId != hakemId)
                 throw new InvalidOperationException("Only the Hakem can select trump.");
 
             round.SetTrump(trumpSuit);

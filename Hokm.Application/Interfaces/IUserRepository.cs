@@ -14,6 +14,7 @@ namespace Hokm.Application.Interfaces
         Task UpdateAvatarAsync(Guid userId,int avatarRef , CancellationToken cancellationToken);
         Task<List<User>> GetFirstFourUsersAsync(CancellationToken cancellationToken);
         Task<bool> DeductCoinsAsync(List<Guid> userIds, int amount, CancellationToken cancellationToken);
+        Task UpdateAsync(User user, CancellationToken cancellationToken);
         Task<List<User>> GetRandomBotsAsync(int count, List<Guid> excludeUserIds, CancellationToken cancellationToken);
     }
 }

@@ -17,7 +17,7 @@ namespace Hokm.Application.Realtime.Execution
 
         public DateTime LastActivityUtc { get; private set; }
 
-        public GameWorker(Guid gameId , IServiceScopeFactory scopeFactory)
+        public GameWorker(Guid gameId, IServiceScopeFactory scopeFactory)
         {
             GameId = gameId;
 
@@ -25,21 +25,32 @@ namespace Hokm.Application.Realtime.Execution
 
             _cts = new CancellationTokenSource();
 
-            _queue = Channel.CreateUnbounded<IGameCommandEnvelope>(
-                new UnboundedChannelOptions
+            _queue = Channel.CreateBounded<IGameCommandEnvelope>(
+                new BoundedChannelOptions(50)
                 {
                     SingleReader = true,
-                    SingleWriter = false
+                    SingleWriter = false,
+                    FullMode = BoundedChannelFullMode.DropWrite
                 });
 
             LastActivityUtc = DateTime.UtcNow;
 
-            _processingTask = Task.Run(ProcessLoopAsync);
+            _processingTask = ProcessLoopAsync();
         }
 
         public async Task<TResponse> EnqueueAsync<TResponse>(GameCommandEnvelope<TResponse> envelope)
         {
-            await _queue.Writer.WriteAsync(envelope);
+            // ✅ اصلاح: استفاده از TryWrite به جای WriteAsync
+            // TryWrite مقدار bool برمی‌گرداند (true اگر موفق، false اگر کانال پر باشد)
+            var success = _queue.Writer.TryWrite(envelope);
+
+            if (!success)
+            {
+                // کانال پر است و پیام دور ریخته شد (DropWrite)
+                // باید CompletionSource را با خطا resolve کنیم تا درخواست hang نشود
+                envelope.CompletionSource.TrySetException(
+                    new InvalidOperationException("صف دستورات بازی پر است. لطفاً دوباره تلاش کنید."));
+            }
 
             return await envelope.CompletionSource.Task;
         }
@@ -56,9 +67,18 @@ namespace Hokm.Application.Realtime.Execution
 
                     await envelope.ExecuteAsync(scope.ServiceProvider);
                 }
-                catch(Exception ex)
+                catch (Exception ex)
                 {
                     Console.WriteLine($"❌ خطا در پردازش تسک بازی: {ex}");
+
+                    try
+                    {
+                        envelope.TrySetException(ex);
+                    }
+                    catch (Exception setEx)
+                    {
+                        Console.WriteLine($"❌ خطای بحرانی در SetException: {setEx}");
+                    }
                 }
             }
         }

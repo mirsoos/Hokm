@@ -6,6 +6,25 @@ namespace Hokm.Application.Realtime.Bot
 {
     public static class HokmBot
     {
+        public static Suit DecideTrump(List<Card> firstFiveCards)
+        {
+            if (firstFiveCards == null || firstFiveCards.Count != 5)
+                throw new ArgumentException("Bot needs exactly 5 cards to choose trump.");
+
+            var bestSuitSelection = firstFiveCards
+                .GroupBy(c => c.Suit)
+                .Select(g => new
+                {
+                    Suit = g.Key,
+                    Count = g.Count(),
+                    MaxRank = g.Max(c => (int)c.Rank)
+                })
+                .OrderByDescending(x => x.Count)
+                .ThenByDescending(x => x.MaxRank)
+                .First();
+
+            return bestSuitSelection.Suit;
+        }
         public static Card DecideCardToPlay(Game game, Guid playerId)
         {
             var currentRound = game.Rounds[game.CurrentRoundIndex!.Value];

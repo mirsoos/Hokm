@@ -1,5 +1,6 @@
 ﻿using Hokm.Application.Features.PickTrump.Commands;
 using Hokm.Application.Interfaces;
+using Hokm.Application.Realtime.Bot;
 using MediatR;
 
 namespace Hokm.Application.Features.AutoPlay.Commands.AutoPickTrump
@@ -9,7 +10,9 @@ namespace Hokm.Application.Features.AutoPlay.Commands.AutoPickTrump
         private readonly IGameRepository _gameRepository;
         private readonly IMediator _mediator;
 
-        public AutoPickTrumpCommandHandler(IGameRepository gameRepository, IMediator mediator)
+        public AutoPickTrumpCommandHandler(
+            IGameRepository gameRepository,
+            IMediator mediator)
         {
             _gameRepository = gameRepository;
             _mediator = mediator;
@@ -20,30 +23,32 @@ namespace Hokm.Application.Features.AutoPlay.Commands.AutoPickTrump
             var game = await _gameRepository.GetByIdAsync(request.GameId, cancellationToken);
             if (game == null) return Unit.Value;
 
-            // فعال کردن وضعیت اتوپلی حاکم به دلیل عدم تصمیم‌گیری به موقع
-            var hakem = game.Players.First(p => p.Id == request.HakemId);
-            hakem.EnableAutoPlay();
-            await _gameRepository.UpdateAsync(game, cancellationToken);
+            var hakem = game.Players.FirstOrDefault(p => p.Id == request.HakemId);
+            if (hakem == null) return Unit.Value;
 
-            var round = game.Rounds[game.CurrentRoundIndex!.Value];
-            var firstFiveCards = round.PlayerHands[request.HakemId];
+            if (!hakem.IsAutoPlay)
+            {
+                hakem.EnableAutoPlay();
+                await _gameRepository.UpdateAsync(game, cancellationToken);
+            }
 
-            // منطق انتخاب حکم: شمارش کارت‌های هم‌خال و انتخاب خالی که بیشترین تعداد را دارد
-            var bestSuit = firstFiveCards
-                .GroupBy(c => c.Suit)
-                .OrderByDescending(g => g.Count())
-                .ThenByDescending(g => g.Max(c => (int)c.Rank)) // اگر تعداد برابر بود، خالی با برگ بزرگتر
-                .First()
-                .Key;
+            if (!game.CurrentRoundIndex.HasValue || game.Rounds.Count <= game.CurrentRoundIndex.Value)
+                return Unit.Value;
 
-            // اجرای دستور ثبت حکم شما با استفاده از حکم انتخاب شده توسط ربات
+            var round = game.Rounds[game.CurrentRoundIndex.Value];
+            if (!round.PlayerHands.TryGetValue(request.HakemId, out var firstFiveCards) || firstFiveCards.Count == 0)
+                return Unit.Value;
+
+            var bestSuit = HokmBot.DecideTrump(firstFiveCards);
+
             var pickTrumpCmd = new PickTrumpCommand
             {
                 GameId = game.Id,
-                DealerId = round.DealerId, // دیلر راند فعلی
+                DealerId = request.HakemId,
                 TrumpSuit = bestSuit
             };
 
+            // استفاده از mediator چون این دستور هم‌اکنون درون لاک Coordinator تایمر قرار دارد
             await _mediator.Send(pickTrumpCmd, cancellationToken);
 
             return Unit.Value;

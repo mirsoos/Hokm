@@ -5,5 +5,6 @@ namespace Hokm.Application.Realtime.Contracts
     {
         public List<CardDto> Cards { get; set; } = new();
         public bool IsInitialDeal { get; set; }
+        public string HakemPlayerId { get; set; }
     }
 }

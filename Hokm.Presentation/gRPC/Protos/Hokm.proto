@@ -2,12 +2,9 @@
 package hokm;
 
 service HokmGameService {
-    // پیوستن به صف جفت‌وجورسازی
     rpc StartGame (StartGameRequest) returns (StartGameResponse);
-    // خروج ارادی از صف
     rpc LeaveLobby (LeaveLobbyRequest) returns (LeaveLobbyResponse);
     
-    // متدهای اصلی بازی حکم
     rpc FormTeams (FormTeamsRequest) returns (FormTeamsResponse);
     rpc DealCards (DealCardsRequest) returns (DealCardsResponse);
     rpc PickTrump (PickTrumpRequest) returns (PickTrumpResponse);
@@ -19,48 +16,71 @@ service HokmGameService {
 
     rpc ResumeControl (ResumeControlRequest) returns (ResumeControlResponse);
 
-    // استریم مشترک برای دریافت رویدادهای لابی و داخل بازی
     rpc StreamGame (StreamRequest) returns (stream GameEvent);
-
     rpc StreamLobby(StreamRequest) returns (stream GameEvent); 
-
 }
 
 service UserService {
+    rpc GetProfile (GetProfileRequest) returns (UserProfileResponse);
     rpc UpdateProfile (UpdateProfileRequest) returns (UpdateProfileResponse);
+    rpc EquipProduct (EquipProductRequest) returns (EquipProductResponse);
 }
 
-message UpdateProfileRequest {
-    string full_name = 1;
-    string user_name = 2;
-    int32 avatar_ref = 3;    
+service ShopService {
+    rpc GetProducts (GetProductsRequest) returns (GetProductsResponse);
+    rpc PurchaseWithCoins (PurchaseWithCoinsRequest) returns (PurchaseWithCoinsResponse);
+    rpc InitiatePayment (InitiatePaymentRequest) returns (InitiatePaymentResponse);
 }
 
-message UpdateProfileResponse {
-    bool status = 1;
+
+enum TableKind {
+    BOT = 0;
+    SPEEDY = 1;
+    PRO = 2;
+    VIP = 3;
 }
 
-message UpdateUserStatsRequest {
-    string user_id = 1;
-    int32 score = 2;
-    bool is_win = 3;
-    TableKind table_kind = 4;
-    int32 coin = 5;
-    int32 kot = 6;
-    int32 hakem_kot = 7;
-    int32 round_won = 8;
-    int32 round_lost = 9;
+enum ProductType {
+    INVALID_PRODUCT = 0;
+    COIN_BUNDLE = 1;
+    VIP_SUBSCRIPTION = 2;
+    CARD_THEME = 3;
+    TABLE_THEME = 4;
+    AVATAR = 5;
+    AVATAR_BORDER = 6;
+    EMOTE = 7;
+    STICKER = 8;
+    VOICE_LINE = 9;
+    QUICK_CHAT = 10;
+    GIFT = 11;
+    XP_BOOSTER = 12;
 }
+
+enum PaymentType {
+    INVALID_PAYMENT = 0;
+    FREE = 1;
+    COINS = 2;
+    DIRECT_PAYMENT = 3;
+    ADS = 4;
+}
+
+enum GatewayType {
+    NONE = 0;
+    ZARINPAL = 1;
+    CAFE_BAZAAR = 2;
+    MYKET = 3;
+}
+
 
 message StartGameRequest {
   string player_id = 1;
   string player_name = 2;
   TableKind table_kind = 3; 
-  int32 rounds = 4; // مشخص کردن تعداد راند مسابقه برای جفت‌وجورسازی دقیق
+  int32 rounds = 4;
 }
 
 message StartGameResponse {
-  string game_id = 1; // این آیدی می‌تواند آیدی لابی موقت یا آیدی بازی واقعی باشد
+  string game_id = 1;
 }
 
 message LeaveLobbyRequest {
@@ -139,13 +159,6 @@ message GameEvent {
   string payload = 2;
 }
 
-enum TableKind {
-    BOT = 0;
-    SPEEDY = 1;
-    PRO = 2;
-    VIP = 3;
-}
-
 message InGameActionRequest {
   string gameId = 1;
   string playerId = 2;
@@ -173,4 +186,96 @@ message ReadyToPlayRequest {
 
 message ReadyToPlayResponse {
   bool success = 1;
+}
+
+
+message GetProfileRequest {
+    string user_id = 1;
+}
+
+message UserProfileResponse {
+    string user_id = 1;
+    string full_name = 2;
+    string user_name = 3;
+    string email = 4;
+    int64 coin = 5;
+    int32 level = 6;
+    int32 score = 7;
+    int32 wins = 8;
+    int32 loses = 9;
+    bool is_vip = 10;
+    string vip_expire_date = 11; 
+    bool has_changed_name = 12;
+    repeated string owned_product_ids = 13;
+    string active_card_theme_id = 14;
+    string active_table_theme_id = 15;
+    string active_avatar_border_id = 16;
+}
+
+message UpdateProfileRequest {
+    string user_id = 1;
+    string full_name = 2;
+    string user_name = 3;
+    int32 avatar_ref = 4;    
+}
+
+message UpdateProfileResponse {
+    bool status = 1;
+}
+
+message EquipProductRequest {
+    string user_id = 1;
+    string product_id = 2;
+    ProductType product_type = 3;
+}
+
+message EquipProductResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+
+message ProductMessage {
+    string id = 1;
+    string title = 2;
+    string description = 3;
+    string asset_key = 4;
+    ProductType product_type = 5;
+    PaymentType payment_type = 6;
+    int64 price = 7;
+    int32 coin_amount = 8;
+    int32 vip_duration_days = 9;
+    bool is_free = 10;
+}
+
+message GetProductsRequest {
+    optional ProductType filter_type = 1; 
+}
+
+message GetProductsResponse {
+    repeated ProductMessage products = 1;
+}
+
+message PurchaseWithCoinsRequest {
+    string user_id = 1;
+    string product_id = 2;
+}
+
+message PurchaseWithCoinsResponse {
+    bool success = 1;
+    string message = 2;
+    int64 remaining_coins = 3;
+}
+
+message InitiatePaymentRequest {
+    string user_id = 1;
+    string product_id = 2;
+    GatewayType gateway = 3; 
+}
+
+message InitiatePaymentResponse {
+    bool success = 1;
+    string transaction_id = 2;
+    string payment_url_or_token = 3; 
+    string message = 4;
 }

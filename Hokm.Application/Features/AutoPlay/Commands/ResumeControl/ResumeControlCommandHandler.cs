@@ -1,7 +1,8 @@
-﻿using Hokm.Application.Events;
-using Hokm.Application.Features.Snapshot.Queries;
+﻿using Hokm.Application.Constants;
+using Hokm.Application.Events;
 using Hokm.Application.Interfaces;
 using Hokm.Application.Realtime.Execution;
+using Hokm.Domain.Enums;
 using MediatR;
 using System.Text.Json;
 
@@ -31,11 +32,7 @@ namespace Hokm.Application.Features.AutoPlay.Commands.ResumeControl
                 player.DisableAutoPlay();
                 await _gameRepository.UpdateAsync(game, cancellationToken);
 
-                if (game.GetCurrentTurnPlayerId() == request.PlayerId)
-                {
-                    _timerManager.StartTimer(game.Id, request.PlayerId, 20.0);
-                }
-
+                // اعلام به همه که بازیکن مجدداً کنترل را به دست گرفت
                 await _mediator.Publish(new GameEventNotification(
                     game.Id,
                     "player_status_changed",
@@ -47,15 +44,31 @@ namespace Hokm.Application.Features.AutoPlay.Commands.ResumeControl
                     })
                 ), cancellationToken);
 
-                var snapshotQuery = new GetGameSnapshotQuery { GameId = game.Id, PlayerId = request.PlayerId };
-                var snapshot = await _mediator.Send(snapshotQuery, cancellationToken);
+                // بررسی فاز تعیین حکم
+                bool isTrumpPhase = game.Status == GameStatus.WaitingForTrumpSelection ||
+                                    (game.CurrentRoundIndex.HasValue && !game.Rounds[game.CurrentRoundIndex.Value].TrumpSuit.HasValue);
 
-                await _mediator.Publish(new PlayerGameEventNotification(
-                    game.Id,
-                    request.PlayerId,
-                    "game_state_updated",
-                    JsonSerializer.Serialize(new { GameState = snapshot })
-                ), cancellationToken);
+                if (isTrumpPhase && game.CurrentRoundIndex.HasValue)
+                {
+                    var activeRound = game.Rounds[game.CurrentRoundIndex.Value];
+                    var dealer = game.Players.First(x => x.Id == activeRound.DealerId);
+                    var hakemSide = game.GetRightSideOf(dealer.PlayerSide);
+                    var hakem = game.Players.First(x => x.PlayerSide == hakemSide);
+
+                    // 👈 فقط اگر نوبت خود این بازیکن است، تایمرش بازتنظیم شود
+                    if (hakem.Id == request.PlayerId)
+                    {
+                        _timerManager.CancelTimer(game.Id);
+                        await _timerManager.StartTimer(game.Id, request.PlayerId, GameConstants.HumanTurnTimeoutSeconds, isTrumpSelection: true);
+                    }
+                }
+                // بررسی فاز بازی ورق
+                else if (game.Status == GameStatus.Playing && game.GetCurrentTurnPlayerId() == request.PlayerId)
+                {
+                    // 👈 فقط اگر نوبت خود این بازیکن است، تایمرش بازتنظیم شود
+                    _timerManager.CancelTimer(game.Id);
+                    await _timerManager.StartTimer(game.Id, request.PlayerId, GameConstants.HumanTurnTimeoutSeconds, isTrumpSelection: false);
+                }
             }
             return Unit.Value;
         }

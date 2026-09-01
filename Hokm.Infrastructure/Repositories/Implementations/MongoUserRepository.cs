@@ -74,13 +74,24 @@ namespace Hokm.Infrastructure.Repositories.Implementations
 
         public async Task<bool> DeductCoinsAsync(List<Guid> userIds, int amount, CancellationToken cancellationToken)
         {
+            var humanUsers = await _mongoDb.Users.Find(
+                Builders<User>.Filter.And(
+                    Builders<User>.Filter.In(u => u.Id, userIds),
+                    Builders<User>.Filter.Eq(u => u.IsBot, false)
+                )
+            ).ToListAsync(cancellationToken);
+
+            if (!humanUsers.Any()) return true;
+
+            var humanUserIds = humanUsers.Select(u => u.Id).ToList();
+
             using (var session = await _mongoDb.Users.Database.Client.StartSessionAsync(cancellationToken: cancellationToken))
             {
                 session.StartTransaction();
 
                 try
                 {
-                    var bulkOps = userIds.Select(userId => new UpdateOneModel<User>(
+                    var bulkOps = humanUserIds.Select(userId => new UpdateOneModel<User>(
                         Builders<User>.Filter.And(
                             Builders<User>.Filter.Eq(u => u.Id, userId),
                             Builders<User>.Filter.Gte(u => u.Coin, amount)
@@ -95,9 +106,9 @@ namespace Hokm.Infrastructure.Repositories.Implementations
                         cancellationToken: cancellationToken
                     );
 
-                    if (result.ModifiedCount != userIds.Count)
+                    if (result.ModifiedCount != humanUserIds.Count)
                     {
-                        throw new InvalidOperationException("یک یا چند کاربر موجودی کافی ندارند یا یافت نشدند.");
+                        throw new InvalidOperationException("یک یا چند کاربر موجودی کافی ندارند.");
                     }
 
                     await session.CommitTransactionAsync(cancellationToken);
@@ -106,7 +117,6 @@ namespace Hokm.Infrastructure.Repositories.Implementations
                 catch (Exception ex)
                 {
                     await session.AbortTransactionAsync(cancellationToken);
-
                     Console.WriteLine($"خطا در تراکنش کسر سکه گروهی: {ex.Message}");
                     return false;
                 }
@@ -124,6 +134,11 @@ namespace Hokm.Infrastructure.Repositories.Implementations
                 .Match(filter)
                 .Sample(count)
                 .ToListAsync(cancellationToken);
+        }
+
+        public async Task UpdateAsync(User user, CancellationToken cancellationToken)
+        {
+            await _mongoDb.Users.ReplaceOneAsync(u => u.Id == user.Id, user, cancellationToken: cancellationToken);
         }
     }
 }

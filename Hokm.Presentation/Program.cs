@@ -76,7 +76,8 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.MapGrpcService<HokmGameService>().EnableGrpcWeb().RequireCors("AllowFrontend");
-
+app.MapGrpcService<ShopGrpcService>();
+app.MapGrpcService<UserGrpcService>();
 app.MapGet("/", () => "Hokm API is running");
 
 using (var scope = app.Services.CreateScope())

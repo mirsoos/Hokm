@@ -1,6 +1,8 @@
-﻿using Hokm.Application.Events;
+﻿using Hokm.Application.Constants;
+using Hokm.Application.Events;
 using Hokm.Application.Interfaces;
 using Hokm.Application.Realtime.Contracts;
+using Hokm.Application.Realtime.Execution;
 using Hokm.Application.Realtime.Mappers;
 using MediatR;
 using System.Text.Json;
@@ -11,11 +13,16 @@ namespace Hokm.Application.Features.PickTrump.Commands
     {
         private readonly IGameRepository _gameRepository;
         private readonly IMediator _mediator;
+        private readonly GameTimerManager _timerManager;
 
-        public PickTrumpCommandHandler(IGameRepository gameRepository, IMediator mediator)
+        public PickTrumpCommandHandler(
+            IGameRepository gameRepository,
+            IMediator mediator,
+            GameTimerManager timerManager)
         {
             _gameRepository = gameRepository;
             _mediator = mediator;
+            _timerManager = timerManager;
         }
 
         public async Task<Unit> Handle(PickTrumpCommand request, CancellationToken cancellationToken)
@@ -24,14 +31,17 @@ namespace Hokm.Application.Features.PickTrump.Commands
             if (currentGame == null)
                 throw new ArgumentNullException(nameof(request.GameId), "Game not found.");
 
-            // اجرای منطق تعیین حکم بر اساس شناسه حاکم و توزیع کارت‌های باقی‌مانده (حجم کارت‌های دست به ۱۳ می‌رسد)
+            _timerManager.CancelTimer(currentGame.Id);
+
             var remainingCards = currentGame.SetTrumpForCurrentRound(request.TrumpSuit, request.DealerId);
+
+            currentGame.StartPlaying();
 
             await _gameRepository.UpdateAsync(currentGame, cancellationToken);
 
             var turnPlayerId = currentGame.GetCurrentTurnPlayerId();
 
-            // ۱. ارسال رویداد انتخاب حکم برای همه بازیکنان
+            // اعلام حکم به همه
             await _mediator.Publish(new GameEventNotification(
                 request.GameId,
                 "trump_picked",
@@ -42,7 +52,7 @@ namespace Hokm.Application.Features.PickTrump.Commands
                 })
             ), cancellationToken);
 
-            // ۲. ارسال کارت‌های باقی‌مانده به صورت مجزا برای هر بازیکن (برای سیستم‌های همگام‌ساز قدیمی)
+            // ارسال ۸ برگ دست دوم
             foreach (var kv in remainingCards)
             {
                 var playerId = kv.Key;
@@ -60,7 +70,7 @@ namespace Hokm.Application.Features.PickTrump.Commands
                 ), cancellationToken);
             }
 
-            // ۳. ارسال دست‌های کامل ۱۳ کارتی به همراه وضعیت IsPlayable جدید برای هر ۴ بازیکن (هسته Dumb Client)
+            // ارسال وضعیت کامل دست هر بازیکن
             if (currentGame.CurrentRoundIndex.HasValue && currentGame.Rounds.Count > currentGame.CurrentRoundIndex.Value)
             {
                 var activeRound = currentGame.Rounds[currentGame.CurrentRoundIndex.Value];
@@ -73,7 +83,6 @@ namespace Hokm.Application.Features.PickTrump.Commands
                         {
                             Suit = c.Suit.ToString(),
                             Rank = c.Rank.ToString(),
-                            // سرور تعیین می‌کند چه کارت‌هایی در آغاز بازی برای بازیکن هدف مجاز هستند (که برای حاکم فعال و برای دیگران غیرفعال خواهد بود)
                             IsPlayable = currentGame.IsCardPlayable(player.Id, c)
                         }).ToList();
 
@@ -81,8 +90,26 @@ namespace Hokm.Application.Features.PickTrump.Commands
                             request.GameId,
                             player.Id,
                             "your_hand_updated",
-                            JsonSerializer.Serialize(new { Cards = handDto }) // بسته‌بندی شد
+                            JsonSerializer.Serialize(new { Cards = handDto })
                         ), cancellationToken);
+                    }
+                }
+            }
+
+            // استارت قطعی اولین نوبت بازی (حاکم)
+            if (turnPlayerId.HasValue)
+            {
+                var turnPlayer = currentGame.Players.FirstOrDefault(p => p.Id == turnPlayerId.Value);
+                if (turnPlayer != null)
+                {
+                    if (turnPlayer.IsAutoPlay)
+                    {
+                        // ۱.۵ ثانیه تأخیر برای دیدن کارت‌های توزیع‌شده در فرانت و انداختن اولین کارت
+                        await _timerManager.StartTimer(currentGame.Id, turnPlayerId.Value, 1.5, isTrumpSelection: false);
+                    }
+                    else
+                    {
+                        await _timerManager.StartTimer(currentGame.Id, turnPlayerId.Value, GameConstants.HumanTurnTimeoutSeconds, isTrumpSelection: false);
                     }
                 }
             }

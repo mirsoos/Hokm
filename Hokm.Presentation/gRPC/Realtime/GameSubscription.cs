@@ -9,21 +9,20 @@ namespace Hokm.Presentation.gRPC.Realtime
         public Guid PlayerId { get; }
         public Channel<GameEvent> EventChannel { get; }
         public DateTime ConnectedAtUtc { get; }
+
         public GameSubscription(Guid gameId, Guid playerId)
         {
             SubscriptionId = Guid.NewGuid();
-
             GameId = gameId;
-
             PlayerId = playerId;
-
             ConnectedAtUtc = DateTime.UtcNow;
 
-            EventChannel = Channel.CreateUnbounded<GameEvent>(
-                new UnboundedChannelOptions
+            EventChannel = Channel.CreateBounded<GameEvent>(
+                new BoundedChannelOptions(100)
                 {
                     SingleReader = true,
-                    SingleWriter = false
+                    SingleWriter = false,
+                    FullMode = BoundedChannelFullMode.DropOldest
                 });
         }
     }

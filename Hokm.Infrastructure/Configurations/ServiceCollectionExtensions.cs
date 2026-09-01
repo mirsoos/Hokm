@@ -4,16 +4,16 @@ using Hokm.Infrastructure.Persistence.Mongo.Configurations;
 using Hokm.Infrastructure.Persistence.Mongo.Context;
 using Hokm.Infrastructure.Repositories.Implementations;
 using Hokm.Infrastructure.Security;
+using Hokm.Infrastructure.Services.Payment.Bazaar;
+using Hokm.Infrastructure.Services.Payment.Zarinpal;
 using Hokm.Infrastructure.Services.Redis.Implemetations;
+using Hokm.Infrastructure.Services.Redis.Interfaces;
 using Hokm.Infrastructure.Services.Sms;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
-using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using StackExchange.Redis;
 using System.Text;
@@ -86,9 +86,14 @@ namespace Hokm.Infrastructure.Configurations
 
             services.AddScoped<IGameRepository, MongoGameRepository>();
             services.AddScoped<IUserRepository, MongoUserRepository>();
-            services.AddScoped<Services.Redis.Interfaces.IRedisCacheService, RedisCacheService>();
+            services.AddScoped<IRedisCacheService, RedisCacheService>();
+            services.AddScoped<IProductRepository, MongoProductRepository>();
+            services.AddScoped<ITransactionRepository, MongoTransactionRepository>();
+            services.AddScoped<IDirectPaymentService, ZarinpalService>();
+            services.AddScoped<IStorePaymentService, BazaarService>();
             services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
             services.AddSingleton<GameExecutionCoordinator>();
+
 
             services.AddCors(options =>
             {

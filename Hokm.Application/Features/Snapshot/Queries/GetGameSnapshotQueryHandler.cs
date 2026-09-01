@@ -8,11 +8,16 @@ namespace Hokm.Application.Features.Snapshot.Queries
     {
         private readonly IGameRepository _gameRepository;
         private readonly IUserRepository _userRepository;
+        private readonly IProductRepository _productRepository;
 
-        public GetGameSnapshotQueryHandler(IGameRepository gameRepository,IUserRepository userRepository)
+        public GetGameSnapshotQueryHandler(
+            IGameRepository gameRepository,
+            IUserRepository userRepository,
+            IProductRepository productRepository)
         {
             _gameRepository = gameRepository;
             _userRepository = userRepository;
+            _productRepository = productRepository;
         }
 
         public async Task<GameSnapshotDto> Handle(GetGameSnapshotQuery request, CancellationToken cancellationToken)
@@ -80,7 +85,6 @@ namespace Hokm.Application.Features.Snapshot.Queries
                 var hakemSide = game.GetRightSideOf(dealer.PlayerSide);
                 var hakem = game.Players.First(x => x.PlayerSide == hakemSide);
 
-
                 foreach (var player in game.Players)
                 {
                     int cardCount = 0;
@@ -90,15 +94,32 @@ namespace Hokm.Application.Features.Snapshot.Queries
                     }
                     var user = await _userRepository.GetByIdAsync(player.Id, cancellationToken);
 
+                    string cardSkin = player.CardSkin;
+                    string boardTheme = player.BoardTheme;
+
+                    if ((string.IsNullOrEmpty(cardSkin) || cardSkin == "default") && user?.ActiveCardThemeId.HasValue == true)
+                    {
+                        var prod = await _productRepository.GetByIdAsync(user.ActiveCardThemeId.Value, cancellationToken);
+                        if (prod != null && !string.IsNullOrEmpty(prod.AssetKey)) cardSkin = prod.AssetKey;
+                    }
+
+                    if ((string.IsNullOrEmpty(boardTheme) || boardTheme == "default") && user?.ActiveTableThemeId.HasValue == true)
+                    {
+                        var prod = await _productRepository.GetByIdAsync(user.ActiveTableThemeId.Value, cancellationToken);
+                        if (prod != null && !string.IsNullOrEmpty(prod.AssetKey)) boardTheme = prod.AssetKey;
+                    }
+
                     snapshot.Players.Add(new PlayerSnapshotDto
                     {
                         PlayerId = player.Id,
                         Name = player.Name,
                         Side = player.PlayerSide.ToString(),
                         IsHakem = hakem.Id == player.Id,
-                        Avatar = user.AvatarRef,
+                        Avatar = user?.AvatarRef ?? 1,
                         CardCount = cardCount,
-                        IsAutoPlay = player.IsAutoPlay
+                        IsAutoPlay = user?.IsBot == true ? false : player.IsAutoPlay,
+                        CardSkin = string.IsNullOrEmpty(cardSkin) ? "default" : cardSkin,
+                        BoardTheme = string.IsNullOrEmpty(boardTheme) ? "default" : boardTheme
                     });
                 }
             }
@@ -106,14 +127,34 @@ namespace Hokm.Application.Features.Snapshot.Queries
             {
                 foreach (var player in game.Players)
                 {
+                    var user = await _userRepository.GetByIdAsync(player.Id, cancellationToken);
+
+                    string cardSkin = player.CardSkin;
+                    string boardTheme = player.BoardTheme;
+
+                    if ((string.IsNullOrEmpty(cardSkin) || cardSkin == "default") && user?.ActiveCardThemeId.HasValue == true)
+                    {
+                        var prod = await _productRepository.GetByIdAsync(user.ActiveCardThemeId.Value, cancellationToken);
+                        if (prod != null && !string.IsNullOrEmpty(prod.AssetKey)) cardSkin = prod.AssetKey;
+                    }
+
+                    if ((string.IsNullOrEmpty(boardTheme) || boardTheme == "default") && user?.ActiveTableThemeId.HasValue == true)
+                    {
+                        var prod = await _productRepository.GetByIdAsync(user.ActiveTableThemeId.Value, cancellationToken);
+                        if (prod != null && !string.IsNullOrEmpty(prod.AssetKey)) boardTheme = prod.AssetKey;
+                    }
+
                     snapshot.Players.Add(new PlayerSnapshotDto
                     {
                         PlayerId = player.Id,
                         Name = player.Name,
                         Side = player.PlayerSide.ToString(),
                         IsHakem = false,
-                        Avatar = 1,
-                        CardCount = 0
+                        Avatar = user?.AvatarRef ?? 1,
+                        CardCount = 0,
+                        IsAutoPlay = user?.IsBot == true ? false : player.IsAutoPlay,
+                        CardSkin = string.IsNullOrEmpty(cardSkin) ? "default" : cardSkin,
+                        BoardTheme = string.IsNullOrEmpty(boardTheme) ? "default" : boardTheme
                     });
                 }
             }

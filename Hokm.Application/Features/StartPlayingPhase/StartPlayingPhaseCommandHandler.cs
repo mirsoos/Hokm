@@ -45,7 +45,7 @@ namespace Hokm.Application.Features.StartPlayingPhase
                 ? GameConstants.BotTurnTimeoutSeconds
                 : GameConstants.HumanTurnTimeoutSeconds;
 
-            _timerManager.StartTimer(game.Id, firstPlayerId, timeoutSeconds);
+            await _timerManager.StartTimer(game.Id, firstPlayerId, timeoutSeconds);
 
             return Unit.Value;
         }

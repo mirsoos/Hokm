@@ -11,14 +11,15 @@ using Hokm.Application.Features.GameStarted.Queries;
 using Hokm.Application.Features.GetRandomBot.Queries;
 using Hokm.Application.Features.PickTrump.Commands;
 using Hokm.Application.Features.PlayCard.Commands;
+using Hokm.Application.Features.ReadyToPlay.Commands;
 using Hokm.Application.Features.Snapshot.Queries;
 using Hokm.Application.Features.StartPlayingPhase;
 using Hokm.Application.Realtime.Execution;
 using Hokm.Domain.Enums;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
 using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Hokm.Presentation.gRPC.Services
 {
@@ -28,7 +29,6 @@ namespace Hokm.Presentation.gRPC.Services
         private readonly GameStreamingService _streamingService;
         private readonly IMediator _mediator;
         private readonly IServiceScopeFactory _scopeFactory;
-        private static readonly object _matchmakingLock = new object();
 
         public class MatchmakingSession
         {
@@ -37,6 +37,7 @@ namespace Hokm.Presentation.gRPC.Services
             public int Rounds { get; set; }
             public List<PlayerDto> Players { get; set; } = new List<PlayerDto>();
             public object Lock { get; } = new object();
+            public CancellationTokenSource Cts { get; } = new CancellationTokenSource();
         }
 
         private static readonly ConcurrentDictionary<Guid, MatchmakingSession> ActiveLobbies =
@@ -45,14 +46,13 @@ namespace Hokm.Presentation.gRPC.Services
         public static readonly ConcurrentDictionary<Guid, Guid> PlayerActiveGames =
             new ConcurrentDictionary<Guid, Guid>();
 
-        public HokmGameService(GameExecutionCoordinator coordinator, GameStreamingService streamingService, IMediator mediator,IServiceScopeFactory scopeFactory)
+        public HokmGameService(GameExecutionCoordinator coordinator, GameStreamingService streamingService, IMediator mediator, IServiceScopeFactory scopeFactory)
         {
             _coordinator = coordinator;
             _streamingService = streamingService;
             _mediator = mediator;
             _scopeFactory = scopeFactory;
         }
-
 
         public override async Task<StartGameResponse> StartGame(StartGameRequest request, ServerCallContext context)
         {
@@ -116,7 +116,6 @@ namespace Hokm.Presentation.gRPC.Services
                 {
                     throw new RpcException(new Status(StatusCode.FailedPrecondition, errorMessage));
                 }
-
             }
             catch (RpcException)
             {
@@ -128,41 +127,185 @@ namespace Hokm.Presentation.gRPC.Services
             }
 
             MatchmakingSession targetSession = null;
+            bool playerAdded = false;
 
-            lock (_matchmakingLock)
+            foreach (var lobby in ActiveLobbies.Values)
             {
-                foreach (var lobby in ActiveLobbies.Values)
+                lock (lobby.Lock)
                 {
-                    lock (lobby.Lock)
+                    if (lobby.TableKind == request.TableKind &&
+                        lobby.Rounds == request.Rounds &&
+                        lobby.Players.Count < 4 &&
+                        !lobby.Players.Any(p => p.PlayerId == playerId))
                     {
-                        if (lobby.TableKind == request.TableKind &&
-                            lobby.Rounds == request.Rounds &&
-                            lobby.Players.Count < 4 &&
-                            !lobby.Players.Any(p => p.PlayerId == playerId))
+                        targetSession = lobby;
+
+                        if (lobby.Players.Count < 4 && !lobby.Players.Any(p => p.PlayerId == playerId))
                         {
-                            targetSession = lobby;
+                            var assignedSide = lobby.Players.Count switch
+                            {
+                                0 => PlayerSide.South,
+                                1 => PlayerSide.West,
+                                2 => PlayerSide.North,
+                                _ => PlayerSide.East
+                            };
+
+                            lobby.Players.Add(new PlayerDto
+                            {
+                                PlayerId = playerId,
+                                Name = playerName,
+                                Side = assignedSide,
+                                Level = userLevel,
+                                Avatar = avatarId,
+                            });
+
+                            playerAdded = true;
                             break;
                         }
                     }
                 }
+            }
 
-                if (targetSession == null)
+            if (!playerAdded)
+            {
+                // ✅ رفع Memory Leak: حلقه while برای تضمین اضافه شدن به ActiveLobbies
+                bool sessionAdded = false;
+
+                while (!sessionAdded)
                 {
-                    targetSession = new MatchmakingSession
+                    // اول بررسی کن که آیا لابی مناسبی وجود دارد
+                    foreach (var lobby in ActiveLobbies.Values)
                     {
-                        TableKind = request.TableKind,
-                        Rounds = request.Rounds
-                    };
-                    ActiveLobbies.TryAdd(targetSession.SessionId, targetSession);
+                        lock (lobby.Lock)
+                        {
+                            if (lobby.TableKind == request.TableKind &&
+                                lobby.Rounds == request.Rounds &&
+                                lobby.Players.Count < 4 &&
+                                !lobby.Players.Any(p => p.PlayerId == playerId))
+                            {
+                                if (lobby.Players.Count < 4 && !lobby.Players.Any(p => p.PlayerId == playerId))
+                                {
+                                    targetSession = lobby;
 
-                    _ = StartGhostBotFiller(targetSession.SessionId);
+                                    var assignedSide = lobby.Players.Count switch
+                                    {
+                                        0 => PlayerSide.South,
+                                        1 => PlayerSide.West,
+                                        2 => PlayerSide.North,
+                                        _ => PlayerSide.East
+                                    };
+
+                                    lobby.Players.Add(new PlayerDto
+                                    {
+                                        PlayerId = playerId,
+                                        Name = playerName,
+                                        Side = assignedSide,
+                                        Level = userLevel,
+                                        Avatar = avatarId,
+                                    });
+
+                                    playerAdded = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (playerAdded)
+                            break;
+                    }
+
+                    if (playerAdded)
+                    {
+                        sessionAdded = true;
+                    }
+                    else
+                    {
+                        // لابی مناسبی پیدا نشد، یک لابی جدید بساز
+                        targetSession = new MatchmakingSession
+                        {
+                            TableKind = request.TableKind,
+                            Rounds = request.Rounds
+                        };
+
+                        lock (targetSession.Lock)
+                        {
+                            targetSession.Players.Add(new PlayerDto
+                            {
+                                PlayerId = playerId,
+                                Name = playerName,
+                                Side = PlayerSide.South,
+                                Level = userLevel,
+                                Avatar = avatarId,
+                            });
+                        }
+
+                        if (ActiveLobbies.TryAdd(targetSession.SessionId, targetSession))
+                        {
+                            _ = StartGhostBotFiller(targetSession.SessionId);
+                            sessionAdded = true;
+                        }
+                        // اگر TryAdd شکست خورد، حلقه while دوباره اجرا می‌شود
+                    }
                 }
+            }
 
-                lock (targetSession.Lock)
+            Guid? actualGameId = await CheckAndLaunchGame(targetSession, context.CancellationToken);
+
+            string responseGameId = actualGameId.HasValue
+                ? actualGameId.Value.ToString()
+                : targetSession.SessionId.ToString();
+
+            return new StartGameResponse { GameId = responseGameId };
+        }
+
+        private async Task StartGhostBotFiller(Guid sessionId)
+        {
+            CancellationTokenSource? cts = null;
+
+            try
+            {
+                if (!ActiveLobbies.TryGetValue(sessionId, out var lobby))
+                    return;
+
+                cts = lobby.Cts;
+                var cancellationToken = cts.Token;
+
+                await Task.Delay(TimeSpan.FromSeconds(5.0), cancellationToken);
+
+                while (ActiveLobbies.TryGetValue(sessionId, out lobby))
                 {
-                    if (!targetSession.Players.Any(p => p.PlayerId == playerId))
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    if (lobby.Players.Count >= 4)
+                        break;
+
+                    var randomDelay = Random.Shared.Next(2000, 5000);
+                    await Task.Delay(randomDelay, cancellationToken);
+
+                    if (!ActiveLobbies.TryGetValue(sessionId, out lobby) || lobby.Players.Count >= 4)
+                        break;
+
+                    var currentLobbyPlayerIds = lobby.Players.Select(p => p.PlayerId).ToList();
+
+                    var query = new GetRandomBotQuery(1, currentLobbyPlayerIds);
+
+                    List<PlayerDto> dbBots;
+                    using (var scope = _scopeFactory.CreateScope())
                     {
-                        var assignedSide = targetSession.Players.Count switch
+                        var scopedMediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+                        dbBots = await scopedMediator.Send(query, cancellationToken);
+                    }
+
+                    if (dbBots == null || !dbBots.Any())
+                        break;
+
+                    var botDto = dbBots.First();
+
+                    lock (lobby.Lock)
+                    {
+                        if (lobby.Players.Count >= 4) break;
+
+                        var assignedSide = lobby.Players.Count switch
                         {
                             0 => PlayerSide.South,
                             1 => PlayerSide.West,
@@ -170,33 +313,52 @@ namespace Hokm.Presentation.gRPC.Services
                             _ => PlayerSide.East
                         };
 
-                        targetSession.Players.Add(new PlayerDto
-                        {
-                            PlayerId = playerId,
-                            Name = playerName,
-                            Side = assignedSide,
-                            Level = userLevel,
-                            Avatar = avatarId
-                        });
+                        botDto.Side = assignedSide;
+                        lobby.Players.Add(botDto);
                     }
+
+                    await CheckAndLaunchGame(lobby, cancellationToken);
                 }
             }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine($"ℹ️ Ghost bot filler برای لابی {sessionId} لغو شد.");
+            }
+            catch (ObjectDisposedException)
+            {
+                Console.WriteLine($"ℹ️ Ghost bot filler برای لابی {sessionId} متوقف شد (Cts disposed).");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ خطای غیرمنتظره در Ghost bot filler برای لابی {sessionId}: {ex.Message}");
+            }
+            finally
+            {
+                try
+                {
+                    cts?.Dispose();
+                }
+                catch { }
+            }
+        }
 
+        private async Task<Guid?> CheckAndLaunchGame(MatchmakingSession session, CancellationToken cancellationToken)
+        {
             bool triggerLaunch = false;
 
-            lock (targetSession.Lock)
+            lock (session.Lock)
             {
-                if (targetSession.Players.Count == 4)
+                if (session.Players.Count == 4)
                 {
                     triggerLaunch = true;
-                    ActiveLobbies.TryRemove(targetSession.SessionId, out _);
+                    ActiveLobbies.TryRemove(session.SessionId, out _);
+                    session.Cts.Cancel();
                 }
             }
 
             if (triggerLaunch)
             {
-                Guid actualGameId = await LaunchGame(targetSession);
-                return new StartGameResponse { GameId = actualGameId.ToString() };
+                return await LaunchGame(session);
             }
             else
             {
@@ -205,68 +367,47 @@ namespace Hokm.Presentation.gRPC.Services
                     EventType = "player_joined",
                     Payload = JsonSerializer.Serialize(new
                     {
-                        ConnectedCount = targetSession.Players.Count,
-                        Players = targetSession.Players.Select(p => new
+                        ConnectedCount = session.Players.Count,
+                        Players = session.Players.Select(p => new
                         {
                             PlayerId = p.PlayerId.ToString(),
-                            Name = p.Name,
+                            p.Name,
                             Side = p.Side.ToString(),
-                            Avatar = p.Avatar,
-                            Level = p.Level
+                            p.Avatar,
+                            p.Level
                         }).ToList()
                     })
                 };
-                await _streamingService.BroadcastAsync(targetSession.SessionId, updateEvent, context.CancellationToken);
+                await _streamingService.BroadcastAsync(session.SessionId, updateEvent, cancellationToken);
+                return null;
             }
-
-            return new StartGameResponse { GameId = targetSession.SessionId.ToString() };
         }
 
-        private async Task StartGhostBotFiller(Guid sessionId)
+        public override async Task<LeaveLobbyResponse> LeaveLobby(LeaveLobbyRequest request, ServerCallContext context)
         {
-            await Task.Delay(TimeSpan.FromSeconds(5.0));
-
-            while (ActiveLobbies.TryGetValue(sessionId, out var lobby))
+            if (!Guid.TryParse(request.LobbyId, out var lobbyId) || !Guid.TryParse(request.PlayerId, out var playerId))
             {
-                if (lobby.Players.Count >= 4)
-                    break;
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه لابی یا بازیکن نامعتبر است."));
+            }
 
-                var randomDelay = Random.Shared.Next(2000, 5000);
-                await Task.Delay(randomDelay);
-
-                if (!ActiveLobbies.TryGetValue(sessionId, out lobby) || lobby.Players.Count >= 4)
-                    break;
-
-                var currentLobbyPlayerIds = lobby.Players.Select(p => p.PlayerId).ToList();
-
-                var query = new GetRandomBotQuery(1, currentLobbyPlayerIds);
-
-                List<PlayerDto> dbBots;
-                using (var scope = _scopeFactory.CreateScope())
-                {
-                    var scopedMediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-                    dbBots = await scopedMediator.Send(query, CancellationToken.None);
-                }
-
-                if (dbBots == null || !dbBots.Any())
-                    break;
-
-                var botDto = dbBots.First();
+            if (ActiveLobbies.TryGetValue(lobbyId, out var lobby))
+            {
+                bool shouldCancel = false;
 
                 lock (lobby.Lock)
                 {
-                    if (lobby.Players.Count >= 4) break;
-
-                    var assignedSide = lobby.Players.Count switch
+                    lobby.Players.RemoveAll(p => p.PlayerId == playerId);
+                    if (lobby.Players.Count == 0)
                     {
-                        0 => PlayerSide.South,
-                        1 => PlayerSide.West,
-                        2 => PlayerSide.North,
-                        _ => PlayerSide.East
-                    };
+                        ActiveLobbies.TryRemove(lobbyId, out _);
+                        shouldCancel = true;
+                    }
+                }
 
-                    botDto.Side = assignedSide;
-                    lobby.Players.Add(botDto);
+                if (shouldCancel)
+                {
+                    lobby.Cts.Cancel();
+                    return new LeaveLobbyResponse { Success = true };
                 }
 
                 var updateEvent = new GameEvent
@@ -278,350 +419,96 @@ namespace Hokm.Presentation.gRPC.Services
                         Players = lobby.Players.Select(p => new
                         {
                             PlayerId = p.PlayerId.ToString(),
-                            p.Name,
+                            Name = p.Name,
                             Side = p.Side.ToString(),
-                            p.Avatar,
-                            p.Level
+                            Avatar = p.Avatar,
+                            Level = p.Level
                         }).ToList()
                     })
                 };
-                await _streamingService.BroadcastAsync(sessionId, updateEvent, CancellationToken.None);
+                await _streamingService.BroadcastAsync(lobbyId, updateEvent, context.CancellationToken);
 
-                if (lobby.Players.Count == 4)
-                {
-                    if (ActiveLobbies.TryRemove(sessionId, out _))
-                    {
-                        await LaunchGame(lobby);
-                    }
-                    break;
-                }
+                return new LeaveLobbyResponse { Success = true };
             }
+
+            return new LeaveLobbyResponse { Success = false };
         }
 
         private async Task<Guid> LaunchGame(MatchmakingSession session)
         {
-            // ساخت اسکوپ مستقل در شروع اجرای متد جهت تامین ایمن Mediator در فرآیندهای پس‌زمینه ربات‌ها
             using (var scope = _scopeFactory.CreateScope())
             {
                 var scopedMediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-                var startCmd = new StartGameCommand
+                try
                 {
-                    Player1 = session.Players[0],
-                    Player2 = session.Players[1],
-                    Player3 = session.Players[2],
-                    Player4 = session.Players[3],
-                    TableKind = (Domain.Enums.TableKind)session.TableKind
-                };
-
-                List<Guid> players = session.Players
-                      .Select(p => p.PlayerId)
-                      .ToList();
-
-                var requiredFee = GameConstants.GetTableFee((Domain.Enums.TableKind)session.TableKind);
-
-                if (requiredFee > 0)
-                {
-                    var deductCoinsCmd = new DeductCoinsCommand(players, requiredFee);
-
-                    try
+                    var startCmd = new StartGameCommand
                     {
-                        // استفاده از اسکوپ فعال و زنده برای تراکنش مالی
+                        Player1 = session.Players[0],
+                        Player2 = session.Players[1],
+                        Player3 = session.Players[2],
+                        Player4 = session.Players[3],
+                        TableKind = (Domain.Enums.TableKind)session.TableKind
+                    };
+
+                    List<Guid> humanPlayers = session.Players
+                          .Select(p => p.PlayerId)
+                          .ToList();
+
+                    var requiredFee = GameConstants.GetTableFee((Domain.Enums.TableKind)session.TableKind);
+
+                    if (requiredFee > 0 && humanPlayers.Any())
+                    {
+                        var deductCoinsCmd = new DeductCoinsCommand(humanPlayers, requiredFee);
                         await scopedMediator.Send(deductCoinsCmd, CancellationToken.None);
                     }
-                    catch (Exception ex)
+
+                    var actualGameId = await scopedMediator.Send(startCmd);
+
+                    foreach (var player in session.Players)
                     {
-                        var errorEvent = new GameEvent
-                        {
-                            EventType = "game_launch_failed",
-                            Payload = JsonSerializer.Serialize(new
-                            {
-                                Reason = "insufficient_coins",
-                                Message = "شروع بازی به دلیل عدم موجودی یا خطای تراکنش مالی یکی از بازیکنان لغو شد."
-                            })
-                        };
-                        await _streamingService.BroadcastAsync(session.SessionId, errorEvent, CancellationToken.None);
-
-                        throw new RpcException(new Status(StatusCode.FailedPrecondition, "خطای تراکنش مالی گروهی در شروع بازی."));
-                    }
-                }
-
-                // استفاده از اسکوپ فعال برای استارت بازی
-                var actualGameId = await scopedMediator.Send(startCmd);
-
-                foreach (var player in session.Players)
-                {
-                    PlayerActiveGames[player.PlayerId] = actualGameId;
-                }
-
-                var formTeamCmd = new FormTeamCommand { GameId = actualGameId };
-                await _coordinator.ExecuteAsync(actualGameId, formTeamCmd, CancellationToken.None);
-
-                var dealer = session.Players.First(p => p.Side == PlayerSide.South);
-                var dealCmd = new DealCardsCommand
-                {
-                    DealerId = dealer.PlayerId,
-                    GameId = actualGameId
-                };
-                await _coordinator.ExecuteAsync(actualGameId, dealCmd, CancellationToken.None);
-
-                var gameStartedEvent = new GameEvent
-                {
-                    EventType = "game_ready",
-                    Payload = JsonSerializer.Serialize(new { GameId = actualGameId.ToString() })
-                };
-                await _streamingService.BroadcastAsync(session.SessionId, gameStartedEvent, CancellationToken.None);
-
-                return actualGameId;
-            }
-        }
-        //public override async Task<StartGameResponse> StartGame(StartGameRequest request, ServerCallContext context)
-        //{
-        //    Guid playerId;
-        //    string playerName;
-
-        //    var httpContext = context.GetHttpContext();
-        //    var userIdStr = httpContext?.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-
-        //    if (Guid.TryParse(userIdStr, out var claimId))
-        //    {
-        //        playerId = claimId;
-        //        playerName = request.PlayerName
-        //                     ?? httpContext?.User?.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
-        //                     ?? "Player";
-        //    }
-        //    else if (!string.IsNullOrEmpty(request.PlayerId) && Guid.TryParse(request.PlayerId, out var reqId))
-        //    {
-        //        playerId = reqId;
-        //        playerName = request.PlayerName ?? "Player";
-        //    }
-        //    else
-        //    {
-        //        throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه کاربر نامعتبر است."));
-        //    }
-
-        //    int avatarId = 1;
-        //    int userLevel = 1;
-        //    var requiredFee = GameConstants.GetTableFee((Hokm.Domain.Enums.TableKind)request.TableKind);
-
-        //    try
-        //    {
-        //        var profileQuery = new Application.Features.profile.Queries.GetProfile.GetProfileQuery(playerId);
-        //        var profileResult = await _mediator.Send(profileQuery, context.CancellationToken);
-
-        //        bool coinCheckPassed = false;
-        //        string errorMessage = "";
-
-        //        profileResult.Match(
-        //            success => {
-        //                avatarId = success.AvatarRef;
-        //                userLevel = success.Level;
-
-        //                if (success.Coin < requiredFee)
-        //                {
-        //                    errorMessage = "سکه شما برای ورود به این میز کافی نیست.";
-        //                }
-        //                else
-        //                {
-        //                    coinCheckPassed = true;
-        //                }
-        //                return true;
-        //            },
-        //            errors => {
-        //                errorMessage = "خطا در استعلام پروفایل کاربر.";
-        //                return false;
-        //            }
-        //        );
-
-        //        if (!coinCheckPassed)
-        //        {
-        //            throw new RpcException(new Status(StatusCode.FailedPrecondition, errorMessage));
-        //        }
-
-        //        if (requiredFee > 0)
-        //        {
-        //            var deductCoinsCmd = new DeductCoinsCommand(playerId, requiredFee);
-        //            await _mediator.Send(deductCoinsCmd, context.CancellationToken);
-        //        }
-        //    }
-        //    catch (RpcException)
-        //    {
-        //        throw;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        throw new RpcException(new Status(StatusCode.Internal, $"خطای غیرمنتظره سرور: {ex.Message}"));
-        //    }
-
-        //    MatchmakingSession targetSession = null;
-
-        //    lock (_matchmakingLock)
-        //    {
-        //        foreach (var lobby in ActiveLobbies.Values)
-        //        {
-        //            lock (lobby.Lock)
-        //            {
-        //                if (lobby.TableKind == request.TableKind &&
-        //                    lobby.Rounds == request.Rounds &&
-        //                    lobby.Players.Count < 4 &&
-        //                    !lobby.Players.Any(p => p.PlayerId == playerId))
-        //                {
-        //                    targetSession = lobby;
-        //                    break;
-        //                }
-        //            }
-        //        }
-
-        //        if (targetSession == null)
-        //        {
-        //            targetSession = new MatchmakingSession
-        //            {
-        //                TableKind = request.TableKind,
-        //                Rounds = request.Rounds
-        //            };
-        //            ActiveLobbies.TryAdd(targetSession.SessionId, targetSession);
-        //        }
-
-        //        lock (targetSession.Lock)
-        //        {
-        //            if (!targetSession.Players.Any(p => p.PlayerId == playerId))
-        //            {
-        //                var assignedSide = targetSession.Players.Count switch
-        //                {
-        //                    0 => PlayerSide.South,
-        //                    1 => PlayerSide.West,
-        //                    2 => PlayerSide.North,
-        //                    _ => PlayerSide.East
-        //                };
-
-        //                targetSession.Players.Add(new PlayerDto
-        //                {
-        //                    PlayerId = playerId,
-        //                    Name = playerName,
-        //                    Side = assignedSide,
-        //                    Level = userLevel,
-        //                    Avatar = avatarId
-        //                });
-        //            }
-        //        }
-        //    }
-
-        //    bool triggerLaunch = false;
-        //    Guid actualGameId = Guid.Empty;
-
-        //    lock (targetSession.Lock)
-        //    {
-        //        if (targetSession.Players.Count == 4)
-        //        {
-        //            triggerLaunch = true;
-        //            ActiveLobbies.TryRemove(targetSession.SessionId, out _);
-        //        }
-        //    }
-
-        //    if (triggerLaunch)
-        //    {
-        //        var startCmd = new StartGameCommand
-        //        {
-        //            Player1 = targetSession.Players[0],
-        //            Player2 = targetSession.Players[1],
-        //            Player3 = targetSession.Players[2],
-        //            Player4 = targetSession.Players[3],
-        //            TableKind = (Domain.Enums.TableKind)targetSession.TableKind
-        //        };
-        //        actualGameId = await _mediator.Send(startCmd);
-
-        //        foreach (var player in targetSession.Players)
-        //        {
-        //            PlayerActiveGames[player.PlayerId] = actualGameId;
-        //        }
-
-        //        var formTeamCmd = new FormTeamCommand { GameId = actualGameId };
-        //        await _coordinator.ExecuteAsync(actualGameId, formTeamCmd, context.CancellationToken);
-
-        //        var dealer = targetSession.Players.First(p => p.Side == PlayerSide.South);
-        //        var dealCmd = new DealCardsCommand
-        //        {
-        //            DealerId = dealer.PlayerId,
-        //            GameId = actualGameId
-        //        };
-        //        await _coordinator.ExecuteAsync(actualGameId, dealCmd, context.CancellationToken);
-
-        //        var gameStartedEvent = new GameEvent
-        //        {
-        //            EventType = "game_ready",
-        //            Payload = JsonSerializer.Serialize(new { GameId = actualGameId.ToString() })
-        //        };
-        //        await _streamingService.BroadcastAsync(targetSession.SessionId, gameStartedEvent, context.CancellationToken);
-
-        //        return new StartGameResponse { GameId = actualGameId.ToString() };
-        //    }
-        //    else
-        //    {
-        //        var updateEvent = new GameEvent
-        //        {
-        //            EventType = "player_joined",
-        //            Payload = JsonSerializer.Serialize(new
-        //            {
-        //                ConnectedCount = targetSession.Players.Count,
-        //                Players = targetSession.Players.Select(p => new
-        //                {
-        //                    PlayerId = p.PlayerId.ToString(),
-        //                    Name = p.Name,
-        //                    Side = p.Side.ToString(),
-        //                    Avatar = p.Avatar,
-        //                    Level = p.Level
-        //                }).ToList()
-        //            })
-        //        };
-        //        await _streamingService.BroadcastAsync(targetSession.SessionId, updateEvent, context.CancellationToken);
-        //    }
-
-        //    return new StartGameResponse { GameId = targetSession.SessionId.ToString() };
-        //}
-        public override async Task<LeaveLobbyResponse> LeaveLobby(LeaveLobbyRequest request, ServerCallContext context)
-        {
-            if (Guid.TryParse(request.LobbyId, out var lobbyId) && Guid.TryParse(request.PlayerId, out var playerId))
-            {
-                if (ActiveLobbies.TryGetValue(lobbyId, out var lobby))
-                {
-                    lock (lobby.Lock)
-                    {
-                        lobby.Players.RemoveAll(p => p.PlayerId == playerId);
-                        if (lobby.Players.Count == 0)
-                        {
-                            ActiveLobbies.TryRemove(lobbyId, out _);
-                            return new LeaveLobbyResponse { Success = true };
-                        }
+                        PlayerActiveGames[player.PlayerId] = actualGameId;
                     }
 
-                    var updateEvent = new GameEvent
+                    var formTeamCmd = new FormTeamCommand { GameId = actualGameId };
+                    await _coordinator.ExecuteAsync(actualGameId, formTeamCmd, CancellationToken.None);
+
+                    var gameStartedEvent = new GameEvent
                     {
-                        EventType = "player_joined",
+                        EventType = "game_ready",
+                        Payload = JsonSerializer.Serialize(new { GameId = actualGameId.ToString() })
+                    };
+                    await _streamingService.BroadcastAsync(session.SessionId, gameStartedEvent, CancellationToken.None);
+
+                    return actualGameId;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ [CRITICAL LAUNCH ERROR] کرش فلو در زمان شروع بازی: {ex}");
+
+                    var errorEvent = new GameEvent
+                    {
+                        EventType = "game_launch_failed",
                         Payload = JsonSerializer.Serialize(new
                         {
-                            ConnectedCount = lobby.Players.Count,
-                            Players = lobby.Players.Select(p => new
-                            {
-                                PlayerId = p.PlayerId.ToString(),
-                                Name = p.Name,
-                                Side = p.Side.ToString(),
-                                Avatar = p.Avatar,
-                                Level = p.Level
-                            }).ToList()
+                            Reason = "launch_failed",
+                            Message = "شروع بازی با خطای غیرمنتظره در سرور مواجه شد."
                         })
                     };
-                    await _streamingService.BroadcastAsync(lobbyId, updateEvent, context.CancellationToken);
+                    await _streamingService.BroadcastAsync(session.SessionId, errorEvent, CancellationToken.None);
 
-                    return new LeaveLobbyResponse { Success = true };
+                    throw;
                 }
             }
-            return new LeaveLobbyResponse { Success = false };
         }
 
         public override async Task StreamGame(StreamRequest request, IServerStreamWriter<GameEvent> responseStream, ServerCallContext context)
         {
-            var gameId = Guid.Parse(request.GameId);
-            var playerId = Guid.Parse(request.PlayerId);
+            if (!Guid.TryParse(request.GameId, out var gameId) || !Guid.TryParse(request.PlayerId, out var playerId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه بازی یا بازیکن نامعتبر است."));
+            }
+
             var subscription = _streamingService.Subscribe(gameId, playerId);
 
             if (ActiveLobbies.TryGetValue(gameId, out var lobby))
@@ -657,14 +544,14 @@ namespace Hokm.Presentation.gRPC.Services
             {
                 try
                 {
-                    // M2: بازیکن به بازی فعال متصل شد. وضعیت او را به صورت آنلاین (True) برای بقیه برادکست می‌کنیم
                     var statusEvent = new GameEvent
                     {
                         EventType = "player_status_changed",
                         Payload = JsonSerializer.Serialize(new
                         {
                             PlayerId = playerId.ToString(),
-                            IsOnline = true
+                            IsOnline = true,
+                            IsAutoPlay = false
                         })
                     };
                     await _streamingService.BroadcastAsync(gameId, statusEvent, context.CancellationToken);
@@ -721,7 +608,6 @@ namespace Hokm.Presentation.gRPC.Services
             }
             catch (OperationCanceledException)
             {
-                await HandleGameDisconnect(gameId, playerId);
             }
             finally
             {
@@ -730,13 +616,13 @@ namespace Hokm.Presentation.gRPC.Services
             }
         }
 
-        // متد اختصاصی استریم لابی انتظار در HokmGameService.cs
         public override async Task StreamLobby(StreamRequest request, IServerStreamWriter<GameEvent> responseStream, ServerCallContext context)
         {
-            var lobbyId = Guid.Parse(request.GameId);
-            var playerId = Guid.Parse(request.PlayerId);
+            if (!Guid.TryParse(request.GameId, out var lobbyId) || !Guid.TryParse(request.PlayerId, out var playerId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه لابی یا بازیکن نامعتبر است."));
+            }
 
-            // سابسکرایب به کانال لابی
             var subscription = _streamingService.Subscribe(lobbyId, playerId);
 
             if (ActiveLobbies.TryGetValue(lobbyId, out var lobby))
@@ -785,7 +671,7 @@ namespace Hokm.Presentation.gRPC.Services
                 await HandleLobbyDisconnect(lobbyId, playerId);
             }
         }
-        // ۱. متد اختصاصی دیسکانکت لابی انتظار (تمیز و بدون نشت)
+
         private async Task HandleLobbyDisconnect(Guid lobbyId, Guid playerId)
         {
             Console.WriteLine($"=== [Lobby Disconnect] Player: {playerId} left Lobby: {lobbyId} ===");
@@ -805,6 +691,7 @@ namespace Hokm.Presentation.gRPC.Services
                 if (isEmpty)
                 {
                     ActiveLobbies.TryRemove(lobbyId, out _);
+                    lobby.Cts.Cancel();
                 }
                 else
                 {
@@ -831,6 +718,11 @@ namespace Hokm.Presentation.gRPC.Services
 
         private async Task HandleGameDisconnect(Guid gameId, Guid playerId)
         {
+            if (_streamingService.IsPlayerSubscribed(gameId, playerId))
+            {
+                return;
+            }
+
             var statusEvent = new GameEvent
             {
                 EventType = "player_status_changed",
@@ -840,14 +732,18 @@ namespace Hokm.Presentation.gRPC.Services
 
             var enableAutoPlayCmd = new EnableAutoPlayCommand(gameId, playerId);
             await _coordinator.ExecuteAsync(gameId, enableAutoPlayCmd, CancellationToken.None);
+
+            await _coordinator.TryCleanupWorkerAsync(gameId);
         }
 
         public override async Task<ResumeControlResponse> ResumeControl(ResumeControlRequest request, ServerCallContext context)
         {
-            var cmd = new ResumeControlCommand(
-                Guid.Parse(request.GameId),
-                Guid.Parse(request.PlayerId)
-            );
+            if (!Guid.TryParse(request.GameId, out var gameId) || !Guid.TryParse(request.PlayerId, out var playerId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه بازی یا بازیکن نامعتبر است."));
+            }
+
+            var cmd = new ResumeControlCommand(gameId, playerId);
 
             await _coordinator.ExecuteAsync(cmd.GameId, cmd, context.CancellationToken);
 
@@ -856,7 +752,10 @@ namespace Hokm.Presentation.gRPC.Services
 
         public override async Task<InGameActionResponse> SendInGameAction(InGameActionRequest request, ServerCallContext context)
         {
-            var gameId = Guid.Parse(request.GameId);
+            if (!Guid.TryParse(request.GameId, out var gameId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه بازی نامعتبر است."));
+            }
 
             var actionEvent = new GameEvent
             {
@@ -876,9 +775,14 @@ namespace Hokm.Presentation.gRPC.Services
 
         public override async Task<FormTeamsResponse> FormTeams(FormTeamsRequest request, ServerCallContext context)
         {
+            if (!Guid.TryParse(request.GameId, out var gameId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه بازی نامعتبر است."));
+            }
+
             var cmd = new FormTeamCommand
             {
-                GameId = Guid.Parse(request.GameId)
+                GameId = gameId
             };
             var result = await _coordinator.ExecuteAsync(
                 cmd.GameId,
@@ -889,10 +793,15 @@ namespace Hokm.Presentation.gRPC.Services
 
         public override async Task<DealCardsResponse> DealCards(DealCardsRequest request, ServerCallContext context)
         {
+            if (!Guid.TryParse(request.DealerId, out var dealerId) || !Guid.TryParse(request.GameId, out var gameId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه دیلر یا بازی نامعتبر است."));
+            }
+
             var cmd = new DealCardsCommand
             {
-                DealerId = Guid.Parse(request.DealerId),
-                GameId = Guid.Parse(request.GameId)
+                DealerId = dealerId,
+                GameId = gameId
             };
             await _coordinator.ExecuteAsync(
                 cmd.GameId,
@@ -903,11 +812,21 @@ namespace Hokm.Presentation.gRPC.Services
 
         public override async Task<PickTrumpResponse> PickTrump(PickTrumpRequest request, ServerCallContext context)
         {
+            if (!Guid.TryParse(request.DealerId, out var dealerId) || !Guid.TryParse(request.GameId, out var gameId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه دیلر یا بازی نامعتبر است."));
+            }
+
+            if (!Enum.TryParse<Suit>(request.TrumpSuit, out var trumpSuit))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "نوع حکم نامعتبر است."));
+            }
+
             var cmd = new PickTrumpCommand
             {
-                DealerId = Guid.Parse(request.DealerId),
-                GameId = Guid.Parse(request.GameId),
-                TrumpSuit = Enum.Parse<Suit>(request.TrumpSuit)
+                DealerId = dealerId,
+                GameId = gameId,
+                TrumpSuit = trumpSuit
             };
             await _coordinator.ExecuteAsync(
                 cmd.GameId,
@@ -918,22 +837,41 @@ namespace Hokm.Presentation.gRPC.Services
 
         public override async Task<ReadyToPlayResponse> ReadyToPlay(ReadyToPlayRequest request, ServerCallContext context)
         {
-            var gameId = Guid.Parse(request.GameId);
+            if (!Guid.TryParse(request.GameId, out var gameId) || !Guid.TryParse(request.PlayerId, out var playerId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه بازی یا بازیکن نامعتبر است."));
+            }
 
-            var cmd = new StartPlayingPhaseCommand(gameId);
-            await _coordinator.ExecuteAsync(gameId, cmd, context.CancellationToken);
+            var cmd = new ReadyToPlayCommand(gameId, playerId);
+
+            await _mediator.Send(cmd, context.CancellationToken);
 
             return new ReadyToPlayResponse { Success = true };
         }
 
         public override async Task<PlayCardResponse> PlayCard(PlayCardRequest request, ServerCallContext context)
         {
+            if (!Guid.TryParse(request.GameId, out var gameId) || !Guid.TryParse(request.PlayerId, out var playerId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه بازی یا بازیکن نامعتبر است."));
+            }
+
+            if (!Enum.TryParse<Rank>(request.Rank, out var rank))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "رتبه کارت نامعتبر است."));
+            }
+
+            if (!Enum.TryParse<Suit>(request.Suit, out var suit))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "خال کارت نامعتبر است."));
+            }
+
             var cmd = new PlayCardCommand
             {
-                GameId = Guid.Parse(request.GameId),
-                PlayerId = Guid.Parse(request.PlayerId),
-                Rank = Enum.Parse<Rank>(request.Rank),
-                Suit = Enum.Parse<Suit>(request.Suit)
+                GameId = gameId,
+                PlayerId = playerId,
+                Rank = rank,
+                Suit = suit
             };
             await _coordinator.ExecuteAsync(
                 cmd.GameId,
@@ -944,9 +882,14 @@ namespace Hokm.Presentation.gRPC.Services
 
         public override async Task<GameState> GetGameState(GetGameStateRequest request, ServerCallContext context)
         {
+            if (!Guid.TryParse(request.GameId, out var gameId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه بازی نامعتبر است."));
+            }
+
             var cmd = new GetGameStateQuery
             {
-                GameId = Guid.Parse(request.GameId)
+                GameId = gameId
             };
             var result = await _mediator.Send(cmd);
             return new GameState
@@ -959,10 +902,15 @@ namespace Hokm.Presentation.gRPC.Services
 
         public override async Task<GameSnapshotResponse> GetSnapshot(GetSnapshotRequest request, ServerCallContext context)
         {
+            if (!Guid.TryParse(request.GameId, out var gameId) || !Guid.TryParse(request.PlayerId, out var playerId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه بازی یا بازیکن نامعتبر است."));
+            }
+
             var cmd = new GetGameSnapshotQuery
             {
-                GameId = Guid.Parse(request.GameId),
-                PlayerId = Guid.Parse(request.PlayerId)
+                GameId = gameId,
+                PlayerId = playerId
             };
             var result = await _mediator.Send(cmd);
             return new GameSnapshotResponse
