@@ -1,5 +1,4 @@
-﻿// Deck.cs
-using Hokm.Domain.Enums;
+﻿using Hokm.Domain.Enums;
 using System.Text.Json.Serialization;
 
 namespace Hokm.Domain.ValueObjects
@@ -50,4 +49,5 @@ namespace Hokm.Domain.ValueObjects
             return dealt;
         }
     }
+
 }

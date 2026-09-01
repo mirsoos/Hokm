@@ -36,26 +36,26 @@ namespace Hokm.Application.Features.ReadyToPlay.Commands
                 currentGame.StartPlaying();
                 await _gameRepository.UpdateAsync(currentGame, cancellationToken);
 
-                var firstPlayerId = currentGame.GetCurrentTurnPlayerId()!.Value;
+                var firstPlayerId = currentGame.GetCurrentTurnPlayerId();
+                if (firstPlayerId.HasValue)
+                {
+                    await _mediator.Publish(new GameEventNotification(
+                        currentGame.Id,
+                        "playing_started",
+                        JsonSerializer.Serialize(new
+                        {
+                            NextTurnPlayerId = firstPlayerId.Value.ToString()
+                        })
+                    ), cancellationToken);
 
-                await _mediator.Publish(new GameEventNotification(
-                    currentGame.Id,
-                    "playing_started",
-                    JsonSerializer.Serialize(new
-                    {
-                        NextTurnPlayerId = firstPlayerId.ToString()
-                    })
-                ), cancellationToken);
+                    var firstPlayer = currentGame.Players.First(p => p.Id == firstPlayerId.Value);
 
-                _timerManager.CancelTimer(currentGame.Id);
+                    double timeoutSeconds = firstPlayer.IsAutoPlay
+                        ? GameConstants.BotTurnTimeoutSeconds
+                        : GameConstants.HumanTurnTimeoutSeconds;
 
-                var firstPlayer = currentGame.Players.First(p => p.Id == firstPlayerId);
-
-                double timeoutSeconds = firstPlayer.IsAutoPlay
-                    ? GameConstants.BotTurnTimeoutSeconds
-                    : GameConstants.HumanTurnTimeoutSeconds;
-
-                await _timerManager.StartTimer(currentGame.Id, firstPlayerId, timeoutSeconds);
+                    await _timerManager.StartTimer(currentGame.Id, firstPlayerId.Value, timeoutSeconds);
+                }
             }
             else if (currentGame.Status == GameStatus.Playing)
             {
@@ -70,14 +70,11 @@ namespace Hokm.Application.Features.ReadyToPlay.Commands
 
                     if (isTurnAuthorized)
                     {
-                        _timerManager.CancelTimer(currentGame.Id);
-
                         double timeoutSeconds = nextPlayer.IsAutoPlay
                             ? GameConstants.BotTurnTimeoutSeconds
                             : GameConstants.HumanTurnTimeoutSeconds;
 
                         await _timerManager.StartTimer(currentGame.Id, nextPlayerId.Value, timeoutSeconds);
-
                         await _gameRepository.UpdateAsync(currentGame, cancellationToken);
                     }
                 }

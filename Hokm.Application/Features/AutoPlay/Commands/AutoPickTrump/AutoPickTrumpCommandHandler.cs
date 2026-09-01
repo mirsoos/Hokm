@@ -1,6 +1,7 @@
 ﻿using Hokm.Application.Features.PickTrump.Commands;
 using Hokm.Application.Interfaces;
 using Hokm.Application.Realtime.Bot;
+using Hokm.Domain.Enums;
 using MediatR;
 
 namespace Hokm.Application.Features.AutoPlay.Commands.AutoPickTrump
@@ -22,6 +23,9 @@ namespace Hokm.Application.Features.AutoPlay.Commands.AutoPickTrump
         {
             var game = await _gameRepository.GetByIdAsync(request.GameId, cancellationToken);
             if (game == null) return Unit.Value;
+
+            if (game.Status != GameStatus.WaitingForTrumpSelection)
+                return Unit.Value;
 
             var hakem = game.Players.FirstOrDefault(p => p.Id == request.HakemId);
             if (hakem == null) return Unit.Value;
@@ -48,7 +52,6 @@ namespace Hokm.Application.Features.AutoPlay.Commands.AutoPickTrump
                 TrumpSuit = bestSuit
             };
 
-            // استفاده از mediator چون این دستور هم‌اکنون درون لاک Coordinator تایمر قرار دارد
             await _mediator.Send(pickTrumpCmd, cancellationToken);
 
             return Unit.Value;

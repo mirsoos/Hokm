@@ -140,5 +140,53 @@ namespace Hokm.Infrastructure.Repositories.Implementations
         {
             await _mongoDb.Users.ReplaceOneAsync(u => u.Id == user.Id, user, cancellationToken: cancellationToken);
         }
+
+        public async Task<bool> AddCoinsAsync(Guid userId, long amount, CancellationToken cancellationToken = default)
+        {
+            if (amount <= 0) return false;
+
+            var filter = Builders<User>.Filter.Eq(u => u.Id, userId);
+            var update = Builders<User>.Update
+                .Inc(u => u.Coin, amount)
+                .Set(u => u.RowVersion, Guid.NewGuid());
+
+            var result = await _mongoDb.Users.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
+            return result.ModifiedCount > 0;
+        }
+
+        public async Task<bool> DeductCoinsAsync(Guid userId, long amount, CancellationToken cancellationToken = default)
+        {
+            if (amount <= 0) return false;
+
+            var filter = Builders<User>.Filter.And(
+                Builders<User>.Filter.Eq(u => u.Id, userId),
+                Builders<User>.Filter.Gte(u => u.Coin, amount)
+            );
+
+            var update = Builders<User>.Update
+                .Inc(u => u.Coin, -amount)
+                .Set(u => u.RowVersion, Guid.NewGuid());
+
+            var result = await _mongoDb.Users.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
+            return result.ModifiedCount > 0;
+        }
+
+        public async Task RecordWinAsync(Guid userId, int xpReward, CancellationToken cancellationToken = default)
+        {
+            var user = await GetByIdAsync(userId, cancellationToken);
+            if (user == null) return;
+
+            user.RecordWin(xpReward);
+            await UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task RecordLossAsync(Guid userId, int xpReward, CancellationToken cancellationToken = default)
+        {
+            var user = await GetByIdAsync(userId, cancellationToken);
+            if (user == null) return;
+
+            user.RecordLoss(xpReward);
+            await UpdateAsync(user, cancellationToken);
+        }
     }
 }

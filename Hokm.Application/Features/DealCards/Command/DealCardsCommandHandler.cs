@@ -33,12 +33,14 @@ namespace Hokm.Application.Features.DealCards.Command
             if (!currentGame.CurrentRoundIndex.HasValue || currentGame.Rounds.Count == 0)
             {
                 var randomDealerIndex = Random.Shared.Next(0, currentGame.Players.Count);
-                var randomDealerId = currentGame.Players[randomDealerIndex].Id;
+                var dealerPlayer = currentGame.Players[randomDealerIndex];
+                var dealerId = dealerPlayer.Id;
 
-                var randomHakemIndex = Random.Shared.Next(0, currentGame.Players.Count);
-                hakemId = currentGame.Players[randomHakemIndex].Id;
+                var hakemSide = currentGame.GetRightSideOf(dealerPlayer.PlayerSide);
+                var hakemPlayer = currentGame.Players.First(p => p.PlayerSide == hakemSide);
+                hakemId = hakemPlayer.Id;
 
-                dealtCards = currentGame.StartRoundAndDeal(randomDealerId, hakemId);
+                dealtCards = currentGame.StartRoundAndDeal(dealerId, hakemId);
             }
             else
             {

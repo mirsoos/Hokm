@@ -1,5 +1,5 @@
-﻿using System;
-using Hokm.Domain.Enums;
+﻿using Hokm.Domain.Enums;
+using System.Text.Json.Serialization;
 
 namespace Hokm.Domain.Entities
 {
@@ -29,6 +29,7 @@ namespace Hokm.Domain.Entities
             if (avatarRef > 0)
             {
                 AvatarRef = avatarRef;
+                IncrementVersion();
             }
         }
 
@@ -37,6 +38,7 @@ namespace Hokm.Domain.Entities
             if (!string.IsNullOrWhiteSpace(cardSkin))
             {
                 CardSkin = cardSkin;
+                IncrementVersion();
             }
         }
 
@@ -45,11 +47,29 @@ namespace Hokm.Domain.Entities
             if (!string.IsNullOrWhiteSpace(boardTheme))
             {
                 BoardTheme = boardTheme;
+                IncrementVersion();
             }
         }
 
-        public void AssignToTeam(Guid teamId) => TeamId = teamId;
-        public void EnableAutoPlay() => IsAutoPlay = true;
-        public void DisableAutoPlay() => IsAutoPlay = false;
+        public void AssignToTeam(Guid teamId)
+        {
+            TeamId = teamId;
+            IncrementVersion();
+        }
+
+        public void EnableAutoPlay()
+        {
+            IsAutoPlay = true;
+            IncrementVersion();
+        }
+
+        public void DisableAutoPlay()
+        {
+            IsAutoPlay = false;
+            IncrementVersion();
+        }
+
+        [JsonConstructor]
+        public Player() { }
     }
 }

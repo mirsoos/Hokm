@@ -40,14 +40,10 @@ namespace Hokm.Application.Realtime.Execution
 
         public async Task<TResponse> EnqueueAsync<TResponse>(GameCommandEnvelope<TResponse> envelope)
         {
-            // ✅ اصلاح: استفاده از TryWrite به جای WriteAsync
-            // TryWrite مقدار bool برمی‌گرداند (true اگر موفق، false اگر کانال پر باشد)
             var success = _queue.Writer.TryWrite(envelope);
 
             if (!success)
             {
-                // کانال پر است و پیام دور ریخته شد (DropWrite)
-                // باید CompletionSource را با خطا resolve کنیم تا درخواست hang نشود
                 envelope.CompletionSource.TrySetException(
                     new InvalidOperationException("صف دستورات بازی پر است. لطفاً دوباره تلاش کنید."));
             }
@@ -57,29 +53,40 @@ namespace Hokm.Application.Realtime.Execution
 
         private async Task ProcessLoopAsync()
         {
-            await foreach (var envelope in _queue.Reader.ReadAllAsync(_cts.Token))
+            try
             {
-                try
+                await foreach (var envelope in _queue.Reader.ReadAllAsync(_cts.Token))
                 {
-                    LastActivityUtc = DateTime.UtcNow;
-
-                    using var scope = _scopeFactory.CreateScope();
-
-                    await envelope.ExecuteAsync(scope.ServiceProvider);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"❌ خطا در پردازش تسک بازی: {ex}");
-
                     try
                     {
-                        envelope.TrySetException(ex);
+                        LastActivityUtc = DateTime.UtcNow;
+
+                        using var scope = _scopeFactory.CreateScope();
+
+                        await envelope.ExecuteAsync(scope.ServiceProvider);
                     }
-                    catch (Exception setEx)
+                    catch (Exception ex)
                     {
-                        Console.WriteLine($"❌ خطای بحرانی در SetException: {setEx}");
+                        Console.WriteLine($"❌ خطا در پردازش تسک بازی: {ex}");
+
+                        try
+                        {
+                            envelope.TrySetException(ex);
+                        }
+                        catch (Exception setEx)
+                        {
+                            Console.WriteLine($"❌ خطای بحرانی در SetException: {setEx}");
+                        }
                     }
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                // خروج طبیعی حلقه در هنگام متوقف شدن ورکر
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ خطای غیرمنتظره در حلقه اجرای GameWorker {GameId}: {ex}");
             }
         }
 
@@ -87,7 +94,11 @@ namespace Hokm.Application.Realtime.Execution
         {
             _queue.Writer.TryComplete();
 
-            _cts.Cancel();
+            try
+            {
+                _cts.Cancel();
+            }
+            catch { }
 
             try
             {
@@ -95,9 +106,11 @@ namespace Hokm.Application.Realtime.Execution
             }
             catch
             {
-
             }
-            _cts.Dispose();
+            finally
+            {
+                _cts.Dispose();
+            }
         }
     }
 }

@@ -40,23 +40,18 @@ namespace Hokm.Application.Features.AutoPlay.Commands.EnableAutoPlay
                     JsonSerializer.Serialize(new { PlayerId = request.PlayerId.ToString(), IsOnline = false, IsAutoPlay = true })
                 ), cancellationToken);
 
-                bool isTrumpPhase = game.Status == GameStatus.WaitingForTeams ||
-                                    game.Status == GameStatus.TeamsReady ||
-                                    (game.CurrentRoundIndex.HasValue && !game.Rounds[game.CurrentRoundIndex.Value].TrumpSuit.HasValue);
+                bool isWaitingForTrump = game.Status == GameStatus.WaitingForTrumpSelection;
 
-                if (isTrumpPhase)
+                if (isWaitingForTrump && game.CurrentRoundIndex.HasValue)
                 {
-                    if (game.CurrentRoundIndex.HasValue)
-                    {
-                        var activeRound = game.Rounds[game.CurrentRoundIndex.Value];
-                        var dealer = game.Players.First(x => x.Id == activeRound.DealerId);
-                        var hakemSide = game.GetRightSideOf(dealer.PlayerSide);
-                        var hakem = game.Players.First(x => x.PlayerSide == hakemSide);
+                    var activeRound = game.Rounds[game.CurrentRoundIndex.Value];
+                    var dealer = game.Players.First(x => x.Id == activeRound.DealerId);
+                    var hakemSide = game.GetRightSideOf(dealer.PlayerSide);
+                    var hakem = game.Players.First(x => x.PlayerSide == hakemSide);
 
-                        if (hakem.Id == request.PlayerId)
-                        {
-                            await _timerManager.StartTimer(game.Id, request.PlayerId, 1.0, isTrumpSelection: true);
-                        }
+                    if (hakem.Id == request.PlayerId)
+                    {
+                        await _timerManager.StartTimer(game.Id, request.PlayerId, 1.0, isTrumpSelection: true);
                     }
                 }
                 else if (game.Status == GameStatus.Playing && game.GetCurrentTurnPlayerId() == request.PlayerId)

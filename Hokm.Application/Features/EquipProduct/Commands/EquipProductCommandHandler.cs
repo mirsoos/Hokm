@@ -33,21 +33,17 @@ namespace Hokm.Application.Features.EquipProduct.Commands
 
         public async Task<ErrorOr<EquipProductResultDto>> Handle(EquipProductCommand request, CancellationToken cancellationToken)
         {
-            // ۱. لود کردن کاربر
             var user = await _userRepository.GetByIdAsync(request.UserId, cancellationToken);
             if (user == null)
                 return Error.NotFound("User.NotFound", "کاربر مورد نظر یافت نشد.");
 
-            // ۲. لود کردن محصول از کاتالوگ فروشگاه
             var product = await _productRepository.GetByIdAsync(request.ProductId, cancellationToken);
             if (product == null)
                 return Error.NotFound("Product.NotFound", "محصول مورد نظر در فروشگاه یافت نشد.");
 
-            // ۳. بررسی همخوانی نوع محصول درخواست شده با دیتابیس (جهت جلوگیری از درخواست‌های فیک)
             if (product.ProductType != request.ProductType)
                 return Error.Validation("Product.TypeMismatch", "نوع محصول با نوع آیتم درخواستی همخوانی ندارد.");
 
-            // ۴. اعمال منطق فعال‌سازی بر اساس نوع محصول تزئینی
             try
             {
                 switch (product.ProductType)

@@ -2,6 +2,7 @@
 using Hokm.Application.Features.PlayCard.Commands;
 using Hokm.Application.Interfaces;
 using Hokm.Application.Realtime.Bot;
+using Hokm.Domain.Entities;
 using MediatR;
 using System.Text.Json;
 
@@ -31,7 +32,6 @@ namespace Hokm.Application.Features.AutoPlay.Commands.AutoPlay
             var player = game.Players.FirstOrDefault(p => p.Id == request.PlayerId);
             if (player == null) return Unit.Value;
 
-            // اگر کاربر انسان بوده و تایم‌اوت شده، او را اتوپلی می‌کنیم و به فرانت اطلاع می‌دهیم
             if (!player.IsAutoPlay)
             {
                 player.EnableAutoPlay();
@@ -49,10 +49,8 @@ namespace Hokm.Application.Features.AutoPlay.Commands.AutoPlay
                 ), cancellationToken);
             }
 
-            // انتخاب کارت توسط الگوریتم ربات
             var chosenCard = HokmBot.DecideCardToPlay(game, request.PlayerId);
 
-            // Fallback: اگر الگوریتم کارت پیدا نکرد، اولین کارت مجاز دست را بردار تا بازی متوقف نشود
             if (chosenCard == null && game.CurrentRoundIndex.HasValue)
             {
                 var round = game.Rounds[game.CurrentRoundIndex.Value];

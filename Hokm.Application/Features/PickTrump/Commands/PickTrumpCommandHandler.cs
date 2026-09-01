@@ -41,7 +41,6 @@ namespace Hokm.Application.Features.PickTrump.Commands
 
             var turnPlayerId = currentGame.GetCurrentTurnPlayerId();
 
-            // اعلام حکم به همه
             await _mediator.Publish(new GameEventNotification(
                 request.GameId,
                 "trump_picked",
@@ -52,7 +51,6 @@ namespace Hokm.Application.Features.PickTrump.Commands
                 })
             ), cancellationToken);
 
-            // ارسال ۸ برگ دست دوم
             foreach (var kv in remainingCards)
             {
                 var playerId = kv.Key;
@@ -70,7 +68,6 @@ namespace Hokm.Application.Features.PickTrump.Commands
                 ), cancellationToken);
             }
 
-            // ارسال وضعیت کامل دست هر بازیکن
             if (currentGame.CurrentRoundIndex.HasValue && currentGame.Rounds.Count > currentGame.CurrentRoundIndex.Value)
             {
                 var activeRound = currentGame.Rounds[currentGame.CurrentRoundIndex.Value];
@@ -96,7 +93,6 @@ namespace Hokm.Application.Features.PickTrump.Commands
                 }
             }
 
-            // استارت قطعی اولین نوبت بازی (حاکم)
             if (turnPlayerId.HasValue)
             {
                 var turnPlayer = currentGame.Players.FirstOrDefault(p => p.Id == turnPlayerId.Value);
@@ -104,7 +100,6 @@ namespace Hokm.Application.Features.PickTrump.Commands
                 {
                     if (turnPlayer.IsAutoPlay)
                     {
-                        // ۱.۵ ثانیه تأخیر برای دیدن کارت‌های توزیع‌شده در فرانت و انداختن اولین کارت
                         await _timerManager.StartTimer(currentGame.Id, turnPlayerId.Value, 1.5, isTrumpSelection: false);
                     }
                     else

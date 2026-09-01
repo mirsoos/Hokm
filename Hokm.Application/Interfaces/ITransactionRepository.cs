@@ -7,5 +7,6 @@ namespace Hokm.Application.Interfaces
         Task CreateAsync(Transaction transaction, CancellationToken cancellationToken = default);
         Task<Transaction?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
         Task UpdateAsync(Transaction transaction, CancellationToken cancellationToken = default);
+        Task<bool> ExistsByTokenAsync(string paymentToken, CancellationToken cancellationToken = default);
     }
 }

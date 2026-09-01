@@ -32,7 +32,6 @@ namespace Hokm.Application.Features.AutoPlay.Commands.ResumeControl
                 player.DisableAutoPlay();
                 await _gameRepository.UpdateAsync(game, cancellationToken);
 
-                // اعلام به همه که بازیکن مجدداً کنترل را به دست گرفت
                 await _mediator.Publish(new GameEventNotification(
                     game.Id,
                     "player_status_changed",
@@ -44,9 +43,7 @@ namespace Hokm.Application.Features.AutoPlay.Commands.ResumeControl
                     })
                 ), cancellationToken);
 
-                // بررسی فاز تعیین حکم
-                bool isTrumpPhase = game.Status == GameStatus.WaitingForTrumpSelection ||
-                                    (game.CurrentRoundIndex.HasValue && !game.Rounds[game.CurrentRoundIndex.Value].TrumpSuit.HasValue);
+                bool isTrumpPhase = game.Status == GameStatus.WaitingForTrumpSelection;
 
                 if (isTrumpPhase && game.CurrentRoundIndex.HasValue)
                 {
@@ -55,18 +52,13 @@ namespace Hokm.Application.Features.AutoPlay.Commands.ResumeControl
                     var hakemSide = game.GetRightSideOf(dealer.PlayerSide);
                     var hakem = game.Players.First(x => x.PlayerSide == hakemSide);
 
-                    // 👈 فقط اگر نوبت خود این بازیکن است، تایمرش بازتنظیم شود
                     if (hakem.Id == request.PlayerId)
                     {
-                        _timerManager.CancelTimer(game.Id);
                         await _timerManager.StartTimer(game.Id, request.PlayerId, GameConstants.HumanTurnTimeoutSeconds, isTrumpSelection: true);
                     }
                 }
-                // بررسی فاز بازی ورق
                 else if (game.Status == GameStatus.Playing && game.GetCurrentTurnPlayerId() == request.PlayerId)
                 {
-                    // 👈 فقط اگر نوبت خود این بازیکن است، تایمرش بازتنظیم شود
-                    _timerManager.CancelTimer(game.Id);
                     await _timerManager.StartTimer(game.Id, request.PlayerId, GameConstants.HumanTurnTimeoutSeconds, isTrumpSelection: false);
                 }
             }

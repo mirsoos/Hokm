@@ -3,7 +3,6 @@ using Hokm.Application.Interfaces;
 using Hokm.Domain.Entities;
 using Hokm.Domain.Enums;
 using Hokm.Infrastructure.Persistence.Mongo.Context;
-using Hokm.Infrastructure.Services.Redis.Constants;
 using MongoDB.Driver;
 
 namespace Hokm.Infrastructure.Repositories.Implementations
@@ -11,32 +10,23 @@ namespace Hokm.Infrastructure.Repositories.Implementations
     public class MongoGameRepository : IGameRepository
     {
         private readonly MongoDbContext _mongoDb;
-        private readonly Services.Redis.Interfaces.IRedisCacheService _redisCache;
-        private readonly IUserRepository _userRepository; // اضافه شد
+        private readonly IUserRepository _userRepository;
 
-        public MongoGameRepository(MongoDbContext mongoDb, Services.Redis.Interfaces.IRedisCacheService redisCache, IUserRepository userRepository)
+        public MongoGameRepository(MongoDbContext mongoDb, IUserRepository userRepository)
         {
             _mongoDb = mongoDb;
-            _redisCache = redisCache;
-            _userRepository = userRepository; // اضافه شد
+            _userRepository = userRepository;
         }
 
         public async Task<bool> ExistsAsync(Guid gameId, CancellationToken cancellationToken)
         {
             var cursor = await _mongoDb.Games.Find(x => x.Id == gameId).Limit(1).ToCursorAsync(cancellationToken);
-            return await cursor.AnyAsync();
+            return await cursor.AnyAsync(cancellationToken);
         }
 
         public async Task<Game> GetByIdAsync(Guid gameId, CancellationToken cancellationToken)
         {
-            //var key = RedisCacheKeySchema.GameKey(gameId);
-            //var cached = await _redisCache.GetAsync<Game>(key,cancellationToken);
-            //if (cached != null)
-            //    return cached;
-
             var game = await _mongoDb.Games.Find(x => x.Id == gameId).FirstOrDefaultAsync(cancellationToken);
-            //if(game != null)
-            //await _redisCache.SetAsync<Game>(key,game,TimeSpan.FromHours(1), cancellationToken);
             return game;
         }
 
@@ -58,7 +48,7 @@ namespace Hokm.Infrastructure.Repositories.Implementations
 
             return games.Select(game =>
             {
-                bool isWin = game.WinnerPlayers.Contains(userId);
+                bool isWin = game.WinnerPlayers != null && game.WinnerPlayers.Contains(userId);
                 var opponent = game.Players.FirstOrDefault(p => p.UserId != userId);
 
                 return new GameHistoryItem(
@@ -74,16 +64,16 @@ namespace Hokm.Infrastructure.Repositories.Implementations
         public async Task<Game> SaveAsync(Game game, CancellationToken cancellationToken)
         {
             await _mongoDb.Games.InsertOneAsync(game, cancellationToken: cancellationToken);
-            var key = RedisCacheKeySchema.GameKey(game.Id);
-            await _redisCache.SetAsync(key, game, TimeSpan.FromHours(1), cancellationToken);
             return game;
         }
 
         public async Task UpdateAsync(Game game, CancellationToken cancellationToken)
         {
-            var key = RedisCacheKeySchema.GameKey(game.Id);
-            await _mongoDb.Games.ReplaceOneAsync(x => x.Id == game.Id, game, cancellationToken: cancellationToken);
-            await _redisCache.RemoveAsync(key, cancellationToken);
+            await _mongoDb.Games.ReplaceOneAsync(
+                x => x.Id == game.Id,
+                game,
+                new ReplaceOptions { IsUpsert = false },
+                cancellationToken);
         }
 
         public async Task<bool> IsGameActiveWithHumanPlayersAsync(Guid gameId, CancellationToken cancellationToken)

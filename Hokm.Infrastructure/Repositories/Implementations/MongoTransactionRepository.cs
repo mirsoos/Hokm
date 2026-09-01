@@ -1,5 +1,6 @@
 ﻿using Hokm.Application.Interfaces;
 using Hokm.Domain.Entities;
+using Hokm.Domain.Enums;
 using Hokm.Infrastructure.Persistence.Mongo.Context;
 using MongoDB.Driver;
 
@@ -31,6 +32,19 @@ namespace Hokm.Infrastructure.Repositories.Implementations
                 t => t.Id == transaction.Id,
                 transaction,
                 cancellationToken: cancellationToken);
+        }
+        public async Task<bool> ExistsByTokenAsync(string paymentToken, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(paymentToken))
+                return false;
+
+            var filter = Builders<Transaction>.Filter.And(
+                Builders<Transaction>.Filter.Eq(t => t.PaymentToken, paymentToken),
+                Builders<Transaction>.Filter.Eq(t => t.Status, TransactionStatus.Completed)
+            );
+
+            var cursor = await _mongoDb.Transactions.Find(filter).Limit(1).ToCursorAsync(cancellationToken);
+            return await cursor.AnyAsync(cancellationToken);
         }
     }
 }

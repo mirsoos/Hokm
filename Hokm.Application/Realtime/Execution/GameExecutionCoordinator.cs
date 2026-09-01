@@ -8,14 +8,11 @@ namespace Hokm.Application.Realtime.Execution
     public sealed class GameExecutionCoordinator
     {
         private readonly ConcurrentDictionary<Guid, GameWorker> _workers;
-
         private readonly IServiceScopeFactory _scopeFactory;
 
-        public GameExecutionCoordinator(
-            IServiceScopeFactory scopeFactory)
+        public GameExecutionCoordinator(IServiceScopeFactory scopeFactory)
         {
             _scopeFactory = scopeFactory;
-
             _workers = new ConcurrentDictionary<Guid, GameWorker>();
         }
 
@@ -43,6 +40,20 @@ namespace Hokm.Application.Realtime.Execution
                 id => new GameWorker(id, _scopeFactory));
         }
 
+        /// <summary>
+        /// پاکسازی و متوقف کردن صریح ورکر پس از پایان طبیعی بازی
+        /// </summary>
+        public async Task RemoveWorkerAsync(Guid gameId)
+        {
+            if (_workers.TryRemove(gameId, out var worker))
+            {
+                await worker.StopAsync();
+            }
+        }
+
+        /// <summary>
+        /// بررسی وضعیت بازی پس از دیسکانکت و پاکسازی ورکر در صورت عدم وجود بازیکن انسانی فعال
+        /// </summary>
         public async Task TryCleanupWorkerAsync(Guid gameId)
         {
             if (!_workers.TryGetValue(gameId, out var worker))
@@ -55,10 +66,9 @@ namespace Hokm.Application.Realtime.Execution
 
             if (!shouldKeepAlive)
             {
-                var dict = (ICollection<KeyValuePair<Guid, GameWorker>>)_workers;
-                if (dict.Remove(new KeyValuePair<Guid, GameWorker>(gameId, worker)))
+                if (_workers.TryRemove(gameId, out var removedWorker))
                 {
-                    await worker.StopAsync();
+                    await removedWorker.StopAsync();
                 }
             }
         }

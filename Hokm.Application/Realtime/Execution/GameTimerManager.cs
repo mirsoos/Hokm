@@ -28,7 +28,7 @@ namespace Hokm.Application.Realtime.Execution
             // ارسال تایمر واقعی به فرانت‌اند
             await BroadcastTimerStartedEventAsync(gameId, playerId, seconds);
 
-            _ = RunTimeoutTaskAsync(gameId, playerId, seconds, isTrumpSelection, cts.Token);
+            _ = RunTimeoutTaskAsync(gameId, playerId, seconds, isTrumpSelection, cts);
         }
 
         public void StartFailSafeTimer(Guid gameId, Guid playerId, double seconds, bool isTrumpSelection = false)
@@ -38,7 +38,7 @@ namespace Hokm.Application.Realtime.Execution
             var cts = new CancellationTokenSource();
             _activeTimers[gameId] = cts;
 
-            _ = RunFailSafeTimeoutTaskAsync(gameId, playerId, seconds, isTrumpSelection, cts.Token);
+            _ = RunFailSafeTimeoutTaskAsync(gameId, playerId, seconds, isTrumpSelection, cts);
         }
 
         public void CancelTimer(Guid gameId)
@@ -55,6 +55,10 @@ namespace Hokm.Application.Realtime.Execution
                 catch (ObjectDisposedException)
                 {
                 }
+                finally
+                {
+                    try { cts.Dispose(); } catch { }
+                }
             }
         }
 
@@ -63,14 +67,18 @@ namespace Hokm.Application.Realtime.Execution
             CancelTimer(gameId);
         }
 
-        private async Task RunTimeoutTaskAsync(Guid gameId, Guid playerId, double seconds, bool isTrumpSelection, CancellationToken token)
+        private async Task RunTimeoutTaskAsync(Guid gameId, Guid playerId, double seconds, bool isTrumpSelection, CancellationTokenSource cts)
         {
+            var token = cts.Token;
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(seconds), token);
 
                 if (!token.IsCancellationRequested)
                 {
+                    // پاکسازی ایمن از دیکشنری پس از اتمام زمان
+                    _activeTimers.TryRemove(new KeyValuePair<Guid, CancellationTokenSource>(gameId, cts));
+
                     using var scope = _scopeFactory.CreateScope();
                     var coordinator = scope.ServiceProvider.GetRequiredService<GameExecutionCoordinator>();
 
@@ -94,16 +102,23 @@ namespace Hokm.Application.Realtime.Execution
             {
                 Console.WriteLine($"Error in RunTimeoutTaskAsync: {ex.Message}");
             }
+            finally
+            {
+                try { cts.Dispose(); } catch { }
+            }
         }
 
-        private async Task RunFailSafeTimeoutTaskAsync(Guid gameId, Guid playerId, double seconds, bool isTrumpSelection, CancellationToken token)
+        private async Task RunFailSafeTimeoutTaskAsync(Guid gameId, Guid playerId, double seconds, bool isTrumpSelection, CancellationTokenSource cts)
         {
+            var token = cts.Token;
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(seconds), token);
 
                 if (!token.IsCancellationRequested)
                 {
+                    _activeTimers.TryRemove(new KeyValuePair<Guid, CancellationTokenSource>(gameId, cts));
+
                     double timeoutSeconds = GameConstants.HumanTurnTimeoutSeconds;
                     await StartTimer(gameId, playerId, timeoutSeconds, isTrumpSelection);
                 }
@@ -115,6 +130,10 @@ namespace Hokm.Application.Realtime.Execution
             {
                 Console.WriteLine($"Error in RunFailSafeTimeoutTaskAsync: {ex.Message}");
             }
+            finally
+            {
+                try { cts.Dispose(); } catch { }
+            }
         }
 
         private async Task BroadcastTimerStartedEventAsync(Guid gameId, Guid playerId, double seconds)
@@ -124,7 +143,6 @@ namespace Hokm.Application.Realtime.Execution
                 using var scope = _scopeFactory.CreateScope();
                 var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-                // 👈 ⚡ حل قطعی باگ: ارسال زمان واقعی (مثلاً ۱ ثانیه برای ربات و ۲۰ ثانیه برای انسان)
                 double clientSeconds = seconds;
 
                 var timerEvent = new GameEventNotification(
@@ -133,7 +151,7 @@ namespace Hokm.Application.Realtime.Execution
                     System.Text.Json.JsonSerializer.Serialize(new
                     {
                         PlayerId = playerId.ToString(),
-                        Seconds = clientSeconds
+                        Seconds = 20
                     })
                 );
 

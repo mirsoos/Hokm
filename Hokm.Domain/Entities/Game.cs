@@ -23,11 +23,12 @@ namespace Hokm.Domain.Entities
         public TableKind TableKind { get; set; }
         public int TargetRounds { get; private set; }
 
-        public Game(Player player1, Player player2, Player player3, Player player4,TableKind tableKind)
+        public Game(Player player1, Player player2, Player player3, Player player4, TableKind tableKind) : base()
         {
             Players = new List<Player> { player1, player2, player3, player4 };
             Teams = new List<Team>();
             Rounds = new List<Round>();
+            WinnerPlayers = new List<Guid>();
             Status = GameStatus.WaitingForTeams;
             CurrentRoundIndex = null;
             TableKind = tableKind;
@@ -55,6 +56,7 @@ namespace Hokm.Domain.Entities
             }
 
             Status = GameStatus.TeamsReady;
+            IncrementVersion();
         }
 
         private List<Guid> GetTurnOrderForDeal(Guid dealerId)
@@ -65,6 +67,7 @@ namespace Hokm.Domain.Entities
             var orderSides = Enumerable.Range(0, 4).Select(i => CounterClockwiseOrder[(startIndex + i) % 4]).ToList();
             return orderSides.Select(side => Players.First(x => x.PlayerSide == side).Id).ToList();
         }
+
         public Dictionary<Guid, List<Card>> StartNextRound()
         {
             if (Status != GameStatus.RoundFinished)
@@ -114,11 +117,11 @@ namespace Hokm.Domain.Entities
             Status = GameStatus.Playing;
 
             var round = Rounds[CurrentRoundIndex!.Value];
-
             var leadPlayerId = round.HakemId;
 
             var firstTrick = new Trick(leadPlayerId, round.TrumpSuit!.Value, GetTurnOrderForTrick(leadPlayerId));
             round.Tricks.Add(firstTrick);
+            IncrementVersion();
         }
 
         public Dictionary<Guid, List<Card>> StartRoundAndDeal(Guid dealerId, Guid hakemId)
@@ -140,6 +143,7 @@ namespace Hokm.Domain.Entities
             var order = GetTurnOrderForDeal(dealerId);
             var dealtCards = round.DealCards(order, 5);
             Status = GameStatus.WaitingForTrumpSelection;
+            IncrementVersion();
             return dealtCards;
         }
 
@@ -165,6 +169,7 @@ namespace Hokm.Domain.Entities
             {
                 allNewCards[playerId] = secondFour[playerId].Concat(lastFour[playerId]).ToList();
             }
+            IncrementVersion();
             return allNewCards;
         }
 
@@ -174,6 +179,13 @@ namespace Hokm.Domain.Entities
             if (CurrentRoundIndex != null)
                 Rounds[CurrentRoundIndex.Value].EndRound();
             CurrentRoundIndex = null;
+
+            var winnerTeam = Teams.OrderByDescending(t => t.TotalScore).FirstOrDefault();
+            if (winnerTeam != null)
+            {
+                WinnerPlayers = winnerTeam.PlayerIds.ToList();
+            }
+            IncrementVersion();
         }
 
         private List<Guid> GetTurnOrderForTrick(Guid leadPlayerId)
@@ -262,6 +274,7 @@ namespace Hokm.Domain.Entities
                     round.Tricks.Add(newTrick);
                 }
             }
+            IncrementVersion();
         }
 
         public bool IsCardPlayable(Guid playerId, Card card)
@@ -338,7 +351,8 @@ namespace Hokm.Domain.Entities
             PlayerSide.East => PlayerSide.North,
             _ => throw new ArgumentOutOfRangeException()
         };
+
         [JsonConstructor]
         public Game() { }
-    }    
+    }
 }

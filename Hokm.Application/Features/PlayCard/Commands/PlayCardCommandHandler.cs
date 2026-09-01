@@ -2,6 +2,7 @@
 using Hokm.Application.DTOs;
 using Hokm.Application.DTOs.GameSnapshot;
 using Hokm.Application.Events;
+using Hokm.Application.Features.StartNextRound.Commands;
 using Hokm.Application.Interfaces;
 using Hokm.Application.Realtime.Execution;
 using Hokm.Domain.Enums;
@@ -18,17 +19,20 @@ namespace Hokm.Application.Features.PlayCard.Commands
         private readonly IMediator _mediator;
         private readonly GameTimerManager _timerManager;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly GameExecutionCoordinator _coordinator;
 
         public PlayCardCommandHandler(
             IGameRepository gameRepository,
             IMediator mediator,
             GameTimerManager timerManager,
-            IServiceScopeFactory scopeFactory)
+            IServiceScopeFactory scopeFactory,
+            GameExecutionCoordinator coordinator)
         {
             _gameRepository = gameRepository;
             _mediator = mediator;
             _timerManager = timerManager;
             _scopeFactory = scopeFactory;
+            _coordinator = coordinator;
         }
 
         public async Task<Unit> Handle(PlayCardCommand request, CancellationToken cancellationToken)
@@ -185,63 +189,18 @@ namespace Hokm.Application.Features.PlayCard.Commands
                     }
                 )), cancellationToken);
 
+                // ارجاع ایمن به صف Worker جهت شروع راند بعدی پس از تاخیر انیمیشن
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        using var scope = _scopeFactory.CreateScope();
-                        var scopedGameRepo = scope.ServiceProvider.GetRequiredService<IGameRepository>();
-                        var scopedMediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-
                         await Task.Delay(5000);
-
-                        var bgGame = await scopedGameRepo.GetByIdAsync(request.GameId, CancellationToken.None);
-                        if (bgGame == null) return;
-
-                        var newDealtCards = bgGame.StartNextRound();
-                        await scopedGameRepo.UpdateAsync(bgGame, CancellationToken.None);
-
-                        var newActiveRound = bgGame.Rounds[bgGame.CurrentRoundIndex!.Value];
-
-                        var newHakemPlayer = bgGame.Players.First(x => x.Id == newActiveRound.HakemId);
-
-                        if (newHakemPlayer.IsAutoPlay)
-                        {
-                            await _timerManager.StartTimer(bgGame.Id, newHakemPlayer.Id, 1.5, isTrumpSelection: true);
-                        }
-                        else
-                        {
-                            await _timerManager.StartTimer(bgGame.Id, newHakemPlayer.Id, GameConstants.HumanTurnTimeoutSeconds, isTrumpSelection: true);
-                        }
-
-                        foreach (var player in bgGame.Players)
-                        {
-                            if (newDealtCards.TryGetValue(player.Id, out var newHand))
-                            {
-                                var handDto = newHand.Select(c => new CardDto
-                                {
-                                    Suit = c.Suit.ToString(),
-                                    Rank = c.Rank.ToString(),
-                                    IsPlayable = true
-                                }).ToList();
-
-                                await scopedMediator.Publish(new PlayerGameEventNotification(
-                                    bgGame.Id,
-                                    player.Id,
-                                    "your_cards_dealt",
-                                    JsonSerializer.Serialize(new
-                                    {
-                                        IsInitialDeal = true,
-                                        Cards = handDto,
-                                        HakemPlayerId = newHakemPlayer.Id.ToString()
-                                    })
-                                ), CancellationToken.None);
-                            }
-                        }
+                        var startNextRoundCmd = new StartNextRoundCommand { GameId = request.GameId };
+                        await _coordinator.ExecuteAsync(request.GameId, startNextRoundCmd, CancellationToken.None);
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error starting next round: {ex.Message}");
+                        Console.WriteLine($"❌ خطا در ارسال دستور شروع راند بعدی به صف: {ex.Message}");
                     }
                 });
             }
@@ -291,6 +250,10 @@ namespace Hokm.Application.Features.PlayCard.Commands
                         catch (Exception ex)
                         {
                             Console.WriteLine($"Error processing end game user stats: {ex.Message}");
+                        }
+                        finally
+                        {
+                            await _coordinator.RemoveWorkerAsync(request.GameId);
                         }
                     });
                 }

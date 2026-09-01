@@ -4,11 +4,6 @@ using Hokm.Application.Interfaces;
 using Hokm.Domain.Entities;
 using Hokm.Domain.Enums;
 using MediatR;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Hokm.Application.Features.VerifyStorePurchase.Commands
 {
@@ -35,6 +30,10 @@ namespace Hokm.Application.Features.VerifyStorePurchase.Commands
         {
             if (request.Gateway != GatewayType.CafeBazaar && request.Gateway != GatewayType.Myket)
                 return Error.Validation("Payment.InvalidGateway", "درگاه نامعتبر برای خرید درون‌برنامه‌ای.");
+
+            bool isTokenUsed = await _transactionRepository.ExistsByTokenAsync(request.PurchaseToken, cancellationToken);
+            if (isTokenUsed)
+                return Error.Conflict("Payment.AlreadyProcessed", "این رسید خرید قبلاً پردازش و تحویل داده شده است.");
 
             var user = await _userRepository.GetByIdAsync(request.UserId, cancellationToken);
             if (user == null) return Error.NotFound("User.NotFound", "کاربر یافت نشد.");

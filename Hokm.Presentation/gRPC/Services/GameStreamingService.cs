@@ -45,14 +45,28 @@ namespace Hokm.Presentation.gRPC.Services
 
             if (_subscriptions.TryGetValue(subscription.GameId, out var existing))
             {
+                bool shouldRemoveKey = false;
                 lock (existing)
                 {
                     existing.RemoveAll(x => x.SubscriptionId == subscription.SubscriptionId);
 
                     if (existing.Count == 0)
                     {
-                        var dict = (ICollection<KeyValuePair<Guid, List<GameSubscription>>>)_subscriptions;
-                        dict.Remove(new KeyValuePair<Guid, List<GameSubscription>>(subscription.GameId, existing));
+                        shouldRemoveKey = true;
+                    }
+                }
+
+                if (shouldRemoveKey)
+                {
+                    if (_subscriptions.TryGetValue(subscription.GameId, out var currentList))
+                    {
+                        lock (currentList)
+                        {
+                            if (currentList.Count == 0)
+                            {
+                                _subscriptions.TryRemove(subscription.GameId, out _);
+                            }
+                        }
                     }
                 }
             }

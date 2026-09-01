@@ -11,20 +11,30 @@ namespace Hokm.Application.Realtime.Bot
             if (firstFiveCards == null || firstFiveCards.Count != 5)
                 throw new ArgumentException("Bot needs exactly 5 cards to choose trump.");
 
+            // سیستم امتیازدهی حرفه‌ای به دست برای انتخاب هوشمندانه‌ترین حکم
+            // آس = 4، شاه = 3، بی بی = 2، سرباز = 1 + وزن تعداد کارت‌های آن خال
             var bestSuitSelection = firstFiveCards
                 .GroupBy(c => c.Suit)
                 .Select(g => new
                 {
                     Suit = g.Key,
                     Count = g.Count(),
-                    MaxRank = g.Max(c => (int)c.Rank)
+                    PowerScore = (g.Count() * 3) + g.Sum(c => c.Rank switch
+                    {
+                        Rank.Ace => 4,
+                        Rank.King => 3,
+                        Rank.Queen => 2,
+                        Rank.Jack => 1,
+                        _ => 0
+                    })
                 })
-                .OrderByDescending(x => x.Count)
-                .ThenByDescending(x => x.MaxRank)
+                .OrderByDescending(x => x.PowerScore)
+                .ThenByDescending(x => x.Count)
                 .First();
 
             return bestSuitSelection.Suit;
         }
+
         public static Card DecideCardToPlay(Game game, Guid playerId)
         {
             var currentRound = game.Rounds[game.CurrentRoundIndex!.Value];
@@ -32,71 +42,96 @@ namespace Hokm.Application.Realtime.Bot
             var playerHand = currentRound.PlayerHands[playerId];
             var trumpSuit = currentRound.TrumpSuit!.Value;
 
-            // ۱. لیست کارت‌های مجاز برای بازی در این نوبت
             var playableCards = playerHand.Where(card => game.IsCardPlayable(playerId, card)).ToList();
 
-            // سناریو الف: ربات اول دست است (زمین خالی است)
+            if (playableCards.Count == 1)
+                return playableCards[0];
+
+            // استخراج تمام کارت‌های بازی‌شده در دست‌های قبلی برای آنالیز حرفه‌ای
+            var playedCardsHistory = currentRound.Tricks
+                .Where(t => t.IsComplete)
+                .SelectMany(t => t.PlayedCards.Values)
+                .Concat(currentTrick.PlayedCards.Values)
+                .ToList();
+
             if (currentTrick.PlayedCards.Count == 0)
             {
-                return DecideAsLead(playableCards, trumpSuit, playerId, game, currentRound);
+                return DecideAsLead(playableCards, trumpSuit, playerId, game, currentRound, playedCardsHistory);
             }
 
-            // سناریو ب: وسط بازی است و کارت‌های دیگران روی زمین است
-            return DecideAsFollower(playableCards, currentTrick, trumpSuit, playerId, game);
+            return DecideAsFollower(playableCards, currentTrick, trumpSuit, playerId, game, currentRound, playedCardsHistory);
         }
 
-        private static Card DecideAsLead(List<Card> playableCards, Suit trumpSuit, Guid playerId, Game game, Round round)
+        private static Card DecideAsLead(
+            List<Card> playableCards,
+            Suit trumpSuit,
+            Guid playerId,
+            Game game,
+            Round round,
+            List<Card> playedHistory)
         {
-            // قانون اول: استراتژی حکم‌کشی (اگر ربات حاکم است و دست‌های اول بازی است)
-            // اگر بیش از ۳ حکم در دست دارد، یک حکم بزرگ (آس یا شاه یا بی بی) بکشد تا حکم‌های زمین جمع شوند
             var botTrumps = playableCards.Where(c => c.Suit == trumpSuit).OrderByDescending(c => c.Rank).ToList();
-            bool isFirstFewTricks = round.Tricks.Count <= 3;
-            if (isFirstFewTricks && botTrumps.Count >= 3)
+
+            // ۱. حکم‌کشی حرفه‌ای: اگر حاکم هستیم یا دست بالا داریم و حکم دستمان زیاد است (بیش از ۲ تا)
+            if (botTrumps.Count >= 3)
             {
-                var highTrump = botTrumps.FirstOrDefault(c => c.Rank >= Rank.Ten);
-                if (highTrump != null) return highTrump;
+                // اگر آس حکم داریم سریع بکشیم تا حکم‌های زمین خالی شوند
+                var aceTrump = botTrumps.FirstOrDefault(c => c.Rank == Rank.Ace);
+                if (aceTrump != null) return aceTrump;
+
+                // اگر شاه حکم داریم و آس قبلاً رفته، شاه بالاترین است
+                var highestTrump = botTrumps.First();
+                if (IsHighestCardRemaining(highestTrump, trumpSuit, playedHistory))
+                    return highestTrump;
             }
 
-            // قانون دوم: جفتِ آس و شاه (Ace-King Combo)
-            // اگر از یک خال هم آس و هم شاه را دارد، ابتدا آس را بازی می‌کند چون کاملاً امن است
-            var suitsInHand = playableCards.Select(c => c.Suit).Distinct();
-            foreach (var suit in suitsInHand)
+            // ۲. بازی کردن کارت‌های سر (Master Cards): کارت‌هایی که در حال حاضر بالاترین کارت آن خال در کل بازی هستند
+            var nonTrumpCards = playableCards.Where(c => c.Suit != trumpSuit).ToList();
+            foreach (var card in nonTrumpCards.OrderByDescending(c => c.Rank))
             {
-                if (suit == trumpSuit) continue;
-                var hasAce = playableCards.Any(c => c.Suit == suit && c.Rank == Rank.Ace);
-                var hasKing = playableCards.Any(c => c.Suit == suit && c.Rank == Rank.King);
-                if (hasAce && hasKing)
+                if (IsHighestCardRemaining(card, card.Suit, playedHistory))
                 {
-                    return playableCards.First(c => c.Suit == suit && c.Rank == Rank.Ace);
+                    return card; // مثلاً تک آس، یا شاهی که آس آن قبلاً سوخته
                 }
             }
 
-            // قانون سوم: آس غیر حکم (فقط در صورتی که حداقل یک پشتیبان پشتش باشد، یعنی تک آس نباشد)
-            var safeAce = playableCards.FirstOrDefault(c =>
-                c.Suit != trumpSuit &&
-                c.Rank == Rank.Ace &&
-                playableCards.Count(x => x.Suit == c.Suit) > 1);
-            if (safeAce != null) return safeAce;
-
-            // قانون چهارم: اگر کارت سر نداشت، یک کارت کوچک از خالِ شلوغ خود بازی کند تا دست‌های بعدی سر شود
-            var bestLongSuitCard = playableCards
-                .Where(c => c.Suit != trumpSuit)
+            // ۳. خالی کردن تک‌خال‌ها (Short Suits): اگر از یک خال فقط یک کارت غیر سر داریم، بازی کنیم تا دست بعد ببُریم
+            var singleCards = nonTrumpCards
                 .GroupBy(c => c.Suit)
-                .OrderByDescending(g => g.Count()) // خالی که بیشتر از همه دارد
-                .Select(g => g.OrderBy(c => c.Rank).First()) // کوچکترین کارت آن خال
+                .Where(g => g.Count() == 1)
+                .Select(g => g.First())
+                .OrderBy(c => c.Rank)
+                .FirstOrDefault();
+
+            if (singleCards != null && botTrumps.Any())
+            {
+                return singleCards;
+            }
+
+            // ۴. بازی کردن از خالِ بلند (Long Suit): خالی که بیشترین تعداد را داریم از پایین بازی می‌کنیم
+            var bestLongSuitCard = nonTrumpCards
+                .GroupBy(c => c.Suit)
+                .OrderByDescending(g => g.Count())
+                .Select(g => g.OrderBy(c => c.Rank).First())
                 .FirstOrDefault();
 
             if (bestLongSuitCard != null) return bestLongSuitCard;
 
-            // در نهایت اگر مجبور شد، کوچکترین کارت ممکن را بازی کند
+            // در نهایت پایین‌ترین کارت ممکن
             return playableCards.OrderBy(c => c.Rank).First();
         }
 
-        private static Card DecideAsFollower(List<Card> playableCards, Trick trick, Suit trumpSuit, Guid botPlayerId, Game game)
+        private static Card DecideAsFollower(
+            List<Card> playableCards,
+            Trick trick,
+            Suit trumpSuit,
+            Guid botPlayerId,
+            Game game,
+            Round round,
+            List<Card> playedHistory)
         {
             var ledSuit = trick.LedSuit!.Value;
 
-            // پیدا کردن بهترین کارت روی زمین و برنده فعلی دست
             Card? bestCardOnTable = null;
             Guid? currentWinnerId = null;
             foreach (var entry in trick.PlayedCards)
@@ -108,67 +143,102 @@ namespace Hokm.Application.Realtime.Bot
                 }
             }
 
-            // پیدا کردن شناسه یارِ ربات
             var botTeam = game.Teams.First(t => t.PlayerIds.Contains(botPlayerId));
             var partnerId = botTeam.PlayerIds.First(id => id != botPlayerId);
             bool partnerIsWinning = currentWinnerId == partnerId;
+            bool isLastPlayer = trick.PlayedCards.Count == 3;
 
             var cardsOfLedSuit = playableCards.Where(c => c.Suit == ledSuit).ToList();
 
-            if (cardsOfLedSuit.Any()) // ربات خال زمینه را دارد
+            // حالت ۱: ربات خال زمینه را در دست دارد
+            if (cardsOfLedSuit.Any())
             {
                 if (partnerIsWinning)
                 {
-                    // یار برنده است؛ ربات ضعیف‌ترین کارت این خال را رد می‌دهد (پرت می‌کند)
-                    return cardsOfLedSuit.OrderBy(c => c.Rank).First();
-                }
-                else
-                {
-                    // حریف برنده است؛ بررسی می‌کنیم آیا کارت برنده داریم؟
-                    var winningCards = cardsOfLedSuit.Where(c => c.Beats(bestCardOnTable!, trumpSuit, ledSuit)).ToList();
-                    if (winningCards.Any())
+                    // اگر یار با کارت سر (مثلاً آس) برنده است یا ما نفر آخر هستیم، کارت ریز رد بده
+                    if (isLastPlayer || IsMasterCard(bestCardOnTable!, ledSuit, trumpSuit, playedHistory))
                     {
-                        // قانون برش اقتصادی: کوچکترین کارتی که حریف را می‌زند بازی کن (نه بزرگترین کارت دستت را)
+                        return cardsOfLedSuit.OrderBy(c => c.Rank).First();
+                    }
+                }
+
+                // تلاش برای بردن دست با حداقل کارت ممکن
+                var winningCards = cardsOfLedSuit.Where(c => c.Beats(bestCardOnTable!, trumpSuit, ledSuit)).ToList();
+                if (winningCards.Any())
+                {
+                    // اگر نفر آخر هستیم، با کوچکترین کارت برنده می‌زنیم
+                    if (isLastPlayer)
+                    {
                         return winningCards.OrderBy(c => c.Rank).First();
                     }
-                    // اگر نمی‌توانیم حریف را بزنیم، کارت ضعیف پرت کنیم تا کارت خوبمان نسوزد
-                    return cardsOfLedSuit.OrderBy(c => c.Rank).First();
+
+                    // اگر نفر وسط هستیم، محکم می‌زنیم تا نفر بعد نتواند رویش بیاید (مثلاً با آس یا شاه)
+                    return winningCards.OrderByDescending(c => c.Rank).First();
                 }
+
+                // اگر نمی‌توانیم ببریم، کم‌ارزش‌ترین کارت را می‌دهیم
+                return cardsOfLedSuit.OrderBy(c => c.Rank).First();
             }
-            else // ربات خال زمینه را ندارد (باید رد کند یا ببُرد)
+
+            // حالت ۲: ربات خال زمینه را ندارد (فرصت بریدن یا رد دادن)
+            else
             {
                 if (partnerIsWinning)
                 {
-                    // یار برنده است؛ پس با خیال راحت یک کارت ضعیف غیرحکم را رد (پرت) می‌کنیم
-                    var lowCard = playableCards.Where(c => c.Suit != trumpSuit).OrderBy(c => c.Rank).FirstOrDefault();
-                    return lowCard ?? playableCards.OrderBy(c => c.Rank).First();
+                    // یار دست را برده؛ پس اصلاً حکم خرج نکن و کارت هرزه غیرحکم رد بده
+                    var discard = playableCards
+                        .Where(c => c.Suit != trumpSuit)
+                        .OrderBy(c => c.Rank)
+                        .FirstOrDefault();
+
+                    return discard ?? playableCards.OrderBy(c => c.Rank).First();
                 }
                 else
                 {
-                    // حریف برنده است؛ اگر حکم داریم دست را ببُریم
+                    // حریف در حال بردن است؛ آیا می‌توانیم با حکم ببُریم؟
                     var trumps = playableCards.Where(c => c.Suit == trumpSuit).ToList();
                     if (trumps.Any())
                     {
-                        // قانون برش اقتصادی با حکم:
-                        // با کوچکترین حکمی که از حکم روی زمین (در صورت وجود) بزرگتر است، کات کن
                         var winningTrumps = trumps.Where(c => c.Beats(bestCardOnTable!, trumpSuit, ledSuit)).ToList();
                         if (winningTrumps.Any())
                         {
+                            // با کوچکترین حکمی که حریف را می‌زند کات کن (اقتصادی‌ترین برش)
                             return winningTrumps.OrderBy(c => c.Rank).First();
-                        }
-
-                        // اگر روی زمین حکمی نبوده، با کوچکترین حکم خود دست را ببُر
-                        if (bestCardOnTable!.Suit != trumpSuit)
-                        {
-                            return trumps.OrderBy(c => c.Rank).First();
                         }
                     }
 
-                    // اگر حکم نداریم یا نمی‌توانیم ببُریم، ضعیف‌ترین کارت غیر حکم خود را پرت کنیم
-                    var throwawayCard = playableCards.Where(c => c.Suit != trumpSuit).OrderBy(c => c.Rank).FirstOrDefault();
-                    return throwawayCard ?? playableCards.OrderBy(c => c.Rank).First();
+                    // حکم نداریم یا نمی‌توانیم ببُریم؛ بی‌ارزش‌ترین کارت را رد بده
+                    var discard = playableCards
+                        .Where(c => c.Suit != trumpSuit)
+                        .OrderBy(c => c.Rank)
+                        .FirstOrDefault();
+
+                    return discard ?? playableCards.OrderBy(c => c.Rank).First();
                 }
             }
+        }
+
+        // متد کمکی: آیا این کارت در حال حاضر بالاترین کارت نسوخته در این خال است؟
+        private static bool IsHighestCardRemaining(Card card, Suit suit, List<Card> playedHistory)
+        {
+            var higherRanks = Enum.GetValues<Rank>().Where(r => r > card.Rank);
+            foreach (var rank in higherRanks)
+            {
+                // اگر کارتی با رنک بالاتر هنوز در بازی نسوخته باشد، پس این کارت سر نیست
+                if (!playedHistory.Any(c => c.Suit == suit && c.Rank == rank))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private static bool IsMasterCard(Card card, Suit ledSuit, Suit trumpSuit, List<Card> playedHistory)
+        {
+            if (card.Suit == trumpSuit)
+                return IsHighestCardRemaining(card, trumpSuit, playedHistory);
+
+            return card.Suit == ledSuit && IsHighestCardRemaining(card, ledSuit, playedHistory);
         }
     }
 }
