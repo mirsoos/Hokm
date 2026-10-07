@@ -11,7 +11,7 @@ namespace Hokm.Domain.Entities
         public string? RefreshToken { get; private set; }
         public DateTime? TokenExpireDate { get; private set; }
         public int AvatarRef { get; private set; } = 1;
-        public int Score { get; private set; } = 0; // همان مجموع امتیاز XP کاربر
+        public int Score { get; private set; } = 0;
         public int Level { get; private set; } = 1;
         public int Wins { get; private set; } = 0;
         public int Loses { get; private set; } = 0;

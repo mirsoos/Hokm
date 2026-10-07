@@ -4,6 +4,8 @@ using Hokm.Application.Interfaces;
 using Hokm.Application.Realtime.Contracts;
 using Hokm.Application.Realtime.Execution;
 using Hokm.Application.Realtime.Mappers;
+using Hokm.Domain.Entities;
+using Hokm.Domain.Enums;
 using MediatR;
 using System.Text.Json;
 
@@ -30,6 +32,11 @@ namespace Hokm.Application.Features.PickTrump.Commands
             var currentGame = await _gameRepository.GetByIdAsync(request.GameId, cancellationToken);
             if (currentGame == null)
                 throw new ArgumentNullException(nameof(request.GameId), "Game not found.");
+
+            if (currentGame.Status != GameStatus.WaitingForTrumpSelection)
+            {
+                return Unit.Value;
+            }
 
             _timerManager.CancelTimer(currentGame.Id);
 

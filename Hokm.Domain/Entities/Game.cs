@@ -20,6 +20,8 @@ namespace Hokm.Domain.Entities
         public Guid? LastTrickWinnerPlayerId { get; private set; }
         [JsonInclude]
         public List<Guid> WinnerPlayers { get; private set; }
+        [JsonInclude]
+        public Guid? LastRoundWinnerTeamId { get; private set; }
         public TableKind TableKind { get; set; }
         public int TargetRounds { get; private set; }
 
@@ -254,10 +256,23 @@ namespace Hokm.Domain.Entities
                 {
                     round.EndRound();
 
-                    var winningTeamId = team1Tricks >= 7 ? Teams[0].Id : Teams[1].Id;
+                    bool isTeam1Win = team1Tricks >= 7;
+                    var winningTeamId = isTeam1Win ? Teams[0].Id : Teams[1].Id;
                     var team = Teams.First(t => t.Id == winningTeamId);
-                    team.AddScore(1);
 
+                    int loserTricks = isTeam1Win ? team2Tricks : team1Tricks;
+                    bool isKoot = loserTricks == 0;
+
+                    int pointsToAdd = 1;
+
+                    if (isKoot)
+                    {
+                        bool hakemIsOnWinningTeam = team.PlayerIds.Contains(round.HakemId);
+                        pointsToAdd = hakemIsOnWinningTeam ? 2 : 3;
+                    }
+
+                    team.AddScore(pointsToAdd);
+                    LastRoundWinnerTeamId = team.Id;
                     if (Teams.Any(t => t.TotalScore >= TargetRounds))
                     {
                         EndGame();

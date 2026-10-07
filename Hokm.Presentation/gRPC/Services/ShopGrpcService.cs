@@ -23,7 +23,11 @@ namespace Hokm.Presentation.gRPC.Services
                     ? (Domain.Enums.ProductType)request.FilterType
                     : null;
 
-                var query = new GetProductsQuery(filterType);
+                Domain.Enums.PaymentType? filterPaymentType = request.HasFilterPaymentType
+                    ? (Domain.Enums.PaymentType)request.FilterPaymentType
+                    : null;
+
+                var query = new GetProductsQuery(filterType, filterPaymentType);
                 var result = await _mediator.Send(query, context.CancellationToken);
 
                 if (result.IsError)
@@ -35,7 +39,7 @@ namespace Hokm.Presentation.gRPC.Services
                 var response = new GetProductsResponse();
                 foreach (var prod in result.Value)
                 {
-                    response.Products.Add(new ProductMessage
+                    var productMsg = new ProductMessage
                     {
                         Id = prod.Id.ToString(),
                         Title = prod.Title,
@@ -46,8 +50,26 @@ namespace Hokm.Presentation.gRPC.Services
                         Price = prod.Price,
                         CoinAmount = prod.CoinAmount ?? 0,
                         VipDurationDays = prod.VipDurationDays ?? 0,
-                        IsFree = prod.IsFree
-                    });
+                        IsFree = prod.IsFree,
+                        MarketSku = prod.MarketSku ?? ""
+                    };
+
+                    if (prod.Items != null)
+                    {
+                        foreach (var item in prod.Items)
+                        {
+                            productMsg.Items.Add(new ProductItemMessage
+                            {
+                                Id = item.Id.ToString(),
+                                Content = item.Content ?? "",
+                                LinkedProductId = item.LinkedProductId?.ToString() ?? "",
+                                Quantity = item.Quantity,
+                                SortOrder = item.SortOrder
+                            });
+                        }
+                    }
+
+                    response.Products.Add(productMsg);
                 }
 
                 return response;

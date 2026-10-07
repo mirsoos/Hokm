@@ -6,6 +6,7 @@ namespace Hokm.Application.Interfaces
     public interface IProductRepository
     {
         Task<Product?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
-        Task<List<Product>> GetActiveProductsAsync(ProductType? type, CancellationToken cancellationToken);
+        Task<List<Product>> GetActiveProductsAsync(ProductType? type,PaymentType? paymentType, CancellationToken cancellationToken);
+        Task<Product?> GetByItemIdAsync(Guid itemId, CancellationToken cancellationToken = default);
     }
 }

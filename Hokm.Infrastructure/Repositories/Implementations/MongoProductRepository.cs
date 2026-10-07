@@ -10,7 +10,6 @@ namespace Hokm.Infrastructure.Repositories.Implementations
     {
         private readonly MongoDbContext _mongoDb;
 
-        // تزریق IMongoDatabase که قبلاً در سیستم تنظیم کرده‌اید
         public MongoProductRepository(MongoDbContext mongoDb)
         {
             _mongoDb = mongoDb;
@@ -22,19 +21,28 @@ namespace Hokm.Infrastructure.Repositories.Implementations
                 .FirstOrDefaultAsync(cancellationToken);
         }
 
-        public async Task<List<Product>> GetActiveProductsAsync(ProductType? type = null, CancellationToken cancellationToken = default)
+        public async Task<List<Product>> GetActiveProductsAsync(ProductType? type = null,PaymentType? paymentType = null,CancellationToken cancellationToken = default)
         {
-            // فیلتر اولیه: فقط محصولات فعال نشان داده شوند
             var filter = Builders<Product>.Filter.Eq(p => p.IsActive, true);
 
-            // اگر فیلتر نوع محصول فرستاده شده بود، آن را به کوئری اضافه کند
             if (type.HasValue)
             {
                 filter &= Builders<Product>.Filter.Eq(p => p.ProductType, type.Value);
             }
 
+            if (paymentType.HasValue)
+            {
+                filter &= Builders<Product>.Filter.Eq(p => p.PaymentType, paymentType.Value);
+            }
+
             return await _mongoDb.Products.Find(filter)
                 .ToListAsync(cancellationToken);
+        }
+
+        public async Task<Product?> GetByItemIdAsync(Guid itemId, CancellationToken cancellationToken = default)
+        {
+            var filter = Builders<Product>.Filter.ElemMatch(p => p.Items, i => i.Id == itemId);
+            return await _mongoDb.Products.Find(filter).FirstOrDefaultAsync(cancellationToken);
         }
     }
 }

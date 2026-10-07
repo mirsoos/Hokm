@@ -1,4 +1,5 @@
-﻿using Grpc.Core;
+﻿using ErrorOr;
+using Grpc.Core;
 using Hokm.Application.Constants;
 using Hokm.Application.DTOs;
 using Hokm.Application.Features.AutoPlay.Commands.EnableAutoPlay;
@@ -8,11 +9,14 @@ using Hokm.Application.Features.DeductCoins.Commands;
 using Hokm.Application.Features.FormTeam.Commands;
 using Hokm.Application.Features.GameStarted.Commands;
 using Hokm.Application.Features.GameStarted.Queries;
+using Hokm.Application.Features.GetPlayerProfile.Queries;
 using Hokm.Application.Features.GetRandomBot.Queries;
 using Hokm.Application.Features.PickTrump.Commands;
 using Hokm.Application.Features.PlayCard.Commands;
 using Hokm.Application.Features.ReadyToPlay.Commands;
 using Hokm.Application.Features.Snapshot.Queries;
+using Hokm.Application.Features.TrickDetails.Queries.GetTrickDetails;
+using Hokm.Application.Interfaces;
 using Hokm.Application.Realtime.Execution;
 using Hokm.Domain.Enums;
 using MediatR;
@@ -697,18 +701,63 @@ namespace Hokm.Presentation.gRPC.Services
                 throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه بازی نامعتبر است."));
             }
 
-            var actionEvent = new GameEvent
+            if (!Guid.TryParse(request.PlayerId, out var playerId))
             {
-                EventType = "ingame_action",
-                Payload = JsonSerializer.Serialize(new
-                {
-                    PlayerId = request.PlayerId,
-                    ActionType = request.ActionType,
-                    Content = request.Content
-                })
-            };
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه بازیکن نامعتبر است."));
+            }
 
-            await _streamingService.BroadcastAsync(gameId, actionEvent, context.CancellationToken);
+            if (!Guid.TryParse(request.ItemId, out var itemId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه آیتم نامعتبر است."));
+            }
+
+            if (PlayerActiveGames.TryGetValue(playerId, out var activeGameId) && activeGameId != gameId)
+            {
+                throw new RpcException(new Status(StatusCode.PermissionDenied, "شما در این بازی حضور ندارید."));
+            }
+
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+                var productRepo = scope.ServiceProvider.GetRequiredService<IProductRepository>();
+
+                var user = await userRepo.GetByIdAsync(playerId, context.CancellationToken);
+                if (user == null)
+                {
+                    throw new RpcException(new Status(StatusCode.NotFound, "کاربر مورد نظر یافت نشد."));
+                }
+
+                var product = await productRepo.GetByItemIdAsync(itemId, context.CancellationToken);
+                if (product == null || !product.IsActive)
+                {
+                    throw new RpcException(new Status(StatusCode.NotFound, "پک یا آیتم مربوطه یافت نشد یا غیرفعال است."));
+                }
+
+                var item = product.Items.FirstOrDefault(i => i.Id == itemId && i.IsActive);
+                if (item == null)
+                {
+                    throw new RpcException(new Status(StatusCode.NotFound, "آیتم مورد نظر در پک یافت نشد."));
+                }
+
+                bool hasAccess = product.IsFree || user.OwnedProductIds.Contains(product.Id);
+                if (!hasAccess)
+                {
+                    throw new RpcException(new Status(StatusCode.PermissionDenied, "شما مالک این استیکر یا متن چت نیستید."));
+                }
+
+                var actionEvent = new GameEvent
+                {
+                    EventType = "ingame_action",
+                    Payload = JsonSerializer.Serialize(new
+                    {
+                        PlayerId = playerId.ToString(),
+                        ActionType = product.ProductType.ToString(),
+                        Content = item.Content
+                    })
+                };
+
+                await _streamingService.BroadcastAsync(gameId, actionEvent, context.CancellationToken);
+            }
 
             return new InGameActionResponse { Success = true };
         }
@@ -838,6 +887,104 @@ namespace Hokm.Presentation.gRPC.Services
                 Status = result.Status.ToString(),
                 CurrentRound = result.CurrentRound
             };
+        }
+
+        public override async Task<GetTrickDetailsResponse> GetTrickDetails(
+     GetTrickDetailsRequest request,
+     ServerCallContext context)
+        {
+            if (!Guid.TryParse(request.GameId, out var gameId) ||
+                !Guid.TryParse(request.PlayerId, out var playerId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه بازی یا بازیکن نامعتبر است."));
+            }
+
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+                var user = await userRepo.GetByIdAsync(playerId, context.CancellationToken);
+
+                if (user == null)
+                {
+                    throw new RpcException(new Status(StatusCode.NotFound, "کاربر مورد نظر یافت نشد."));
+                }
+
+                if (user.IsVip)
+                {
+                    throw new RpcException(new Status(StatusCode.PermissionDenied, "این قابلیت مخصوص کاربران VIP است."));
+                }
+            }
+
+            var query = new GetTrickDetailsQuery(
+                GameId: gameId,
+                RequesterId: playerId,
+                TrickIndex: request.TrickIndex,
+                TeamId: request.TeamId
+            );
+
+            var result = await _mediator.Send(query, context.CancellationToken);
+
+            return result.Match(
+                success =>
+                {
+                    var response = new GetTrickDetailsResponse { Success = true };
+                    response.Cards.AddRange(success.Cards.Select(c => new TrickCardMessage
+                    {
+                        Suit = c.Suit,
+                        Rank = c.Rank,
+                        PlayerId = c.PlayerId.ToString()
+                    }));
+                    return response;
+                },
+                errors =>
+                {
+                    var first = errors.First();
+                    var status = first.Type switch
+                    {
+                        ErrorType.NotFound => StatusCode.NotFound,
+                        ErrorType.Validation => StatusCode.InvalidArgument,
+                        ErrorType.Forbidden => StatusCode.PermissionDenied,
+                        _ => StatusCode.Internal
+                    };
+                    throw new RpcException(new Status(status, first.Description));
+                }
+            );
+        }
+
+        public override async Task<GetPlayerProfileResponse> GetPlayerProfile(GetPlayerProfileRequest request,ServerCallContext context)
+        {
+            if (!Guid.TryParse(request.GameId, out var gameId) ||
+                !Guid.TryParse(request.PlayerId, out var requesterId) ||
+                !Guid.TryParse(request.TargetPlayerId, out var targetPlayerId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه بازی یا بازیکن نامعتبر است."));
+            }
+
+            var query = new GetPlayerProfileQuery(gameId, requesterId, targetPlayerId);
+            var result = await _mediator.Send(query, context.CancellationToken);
+
+            return result.Match(
+                success => new GetPlayerProfileResponse
+                {
+                    Success = true,
+                    PlayerId = success.PlayerId.ToString(),
+                    Name = success.Name,
+                    Avatar = success.Avatar,
+                    Border = success.Border ?? string.Empty,
+                    Level = success.Level,
+                    Coins = success.Coins,
+                    IsVip = success.IsVip,
+                    WonHands = success.WonHands,
+                    LostHands = success.LostHands,
+                },
+                errors =>
+                {
+                    var first = errors.First();
+                    throw new RpcException(new Status(
+                        first.Type == ErrorOr.ErrorType.NotFound ? StatusCode.NotFound : StatusCode.Internal,
+                        first.Description));
+                }
+            );
         }
 
         public override async Task<GameSnapshotResponse> GetSnapshot(GetSnapshotRequest request, ServerCallContext context)

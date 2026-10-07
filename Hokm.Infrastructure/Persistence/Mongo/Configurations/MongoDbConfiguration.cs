@@ -75,6 +75,7 @@ namespace Hokm.Infrastructure.Persistence.Mongo.Configurations
                 new RoundConfiguration().Configure();
                 new TeamConfiguration().Configure();
                 new TrickConfiguration().Configure();
+                new ProductConfiguration().Configure();
 
                 _isConfigured = true;
             }

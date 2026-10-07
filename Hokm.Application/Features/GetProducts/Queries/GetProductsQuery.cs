@@ -5,6 +5,6 @@ using MediatR;
 
 namespace Hokm.Application.Features.GetProducts.Queries
 {
-    public record GetProductsQuery(ProductType? FilterType) : IRequest<ErrorOr<List<ProductDto>>>;
+    public record GetProductsQuery(ProductType? FilterType,PaymentType? FilterPaymentType) : IRequest<ErrorOr<List<ProductDto>>>;
 
 }

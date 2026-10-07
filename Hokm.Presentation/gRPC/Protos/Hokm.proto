@@ -15,7 +15,8 @@ service HokmGameService {
     rpc ReadyToPlay (ReadyToPlayRequest) returns (ReadyToPlayResponse);
 
     rpc ResumeControl (ResumeControlRequest) returns (ResumeControlResponse);
-
+    rpc GetTrickDetails (GetTrickDetailsRequest) returns (GetTrickDetailsResponse);
+    rpc GetPlayerProfile(GetPlayerProfileRequest) returns (GetPlayerProfileResponse);
     rpc StreamGame (StreamRequest) returns (stream GameEvent);
     rpc StreamLobby(StreamRequest) returns (stream GameEvent); 
 }
@@ -30,6 +31,8 @@ service ShopService {
     rpc GetProducts (GetProductsRequest) returns (GetProductsResponse);
     rpc PurchaseWithCoins (PurchaseWithCoinsRequest) returns (PurchaseWithCoinsResponse);
     rpc InitiatePayment (InitiatePaymentRequest) returns (InitiatePaymentResponse);
+    rpc VerifyStorePurchase (VerifyStorePurchaseRequest) returns (VerifyStorePurchaseResponse);
+
 }
 
 
@@ -50,10 +53,11 @@ enum ProductType {
     AVATAR_BORDER = 6;
     EMOTE = 7;
     STICKER = 8;
-    VOICE_LINE = 9;
-    QUICK_CHAT = 10;
-    GIFT = 11;
-    XP_BOOSTER = 12;
+    EMOJI = 9;
+    VOICE_LINE = 10;
+    QUICK_CHAT = 11;
+    GIFT = 12;
+    XP_BOOSTER = 13;
 }
 
 enum PaymentType {
@@ -62,6 +66,7 @@ enum PaymentType {
     COINS = 2;
     DIRECT_PAYMENT = 3;
     ADS = 4;
+    MARKET_IAP = 5
 }
 
 enum GatewayType {
@@ -160,10 +165,9 @@ message GameEvent {
 }
 
 message InGameActionRequest {
-  string gameId = 1;
-  string playerId = 2;
-  string actionType = 3;
-  string content = 4;
+  string game_id = 1;
+  string player_id = 2;
+  string item_id = 3;
 }
 
 message InGameActionResponse {
@@ -212,6 +216,25 @@ message UserProfileResponse {
     string active_avatar_border_id = 16;
 }
 
+message TrickCardMessage {
+  string suit = 1;
+  string rank = 2;
+  string player_id = 3;
+}
+
+message GetTrickDetailsRequest {
+  string game_id = 1;
+  string player_id = 2;
+  int32 trick_index = 3;
+  string team_id = 4; 
+}
+
+message GetTrickDetailsResponse {
+  bool success = 1;
+  repeated TrickCardMessage cards = 2;
+}
+
+
 message UpdateProfileRequest {
     string user_id = 1;
     string full_name = 2;
@@ -234,6 +257,13 @@ message EquipProductResponse {
     string message = 2;
 }
 
+message ProductItemMessage {
+    string id = 1;
+    string content = 2;
+    string linked_product_id = 3;
+    int32 quantity = 4;
+    int32 sort_order = 5;
+}
 
 message ProductMessage {
     string id = 1;
@@ -246,10 +276,13 @@ message ProductMessage {
     int32 coin_amount = 8;
     int32 vip_duration_days = 9;
     bool is_free = 10;
+    repeated ProductItemMessage items = 11;
+    string market_sku = 12; 
 }
 
 message GetProductsRequest {
     optional ProductType filter_type = 1; 
+    optional PaymentType filter_payment_type = 2;
 }
 
 message GetProductsResponse {
@@ -278,4 +311,35 @@ message InitiatePaymentResponse {
     string transaction_id = 2;
     string payment_url_or_token = 3; 
     string message = 4;
+}
+
+message GetPlayerProfileRequest {
+  string game_id = 1;
+  string player_id = 2;
+  string target_player_id = 3;
+}
+
+message GetPlayerProfileResponse {
+  bool success = 1;
+  string player_id = 2;
+  string name = 3;
+  string avatar = 4;
+  string border = 5;
+  int32 level = 6;
+  int64 coins = 7;
+  bool is_vip = 8;
+  int32 won_hands = 9;
+  int32 lost_hands = 10;
+}
+
+message VerifyStorePurchaseRequest {
+    string user_id = 1;
+    string product_id = 2;
+    string purchase_token = 3;
+    GatewayType gateway = 4;
+}
+
+message VerifyStorePurchaseResponse {
+    bool success = 1;
+    string message = 2;
 }

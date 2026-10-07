@@ -171,7 +171,8 @@ namespace Hokm.Application.Features.PlayCard.Commands
             // پایان راند
             if (currentGame.Status == GameStatus.RoundFinished)
             {
-                var winningTeamId = currentGame.Teams.OrderByDescending(t => t.TotalScore).First().Id;
+                var winningTeamId = currentGame.LastRoundWinnerTeamId
+                    ?? currentGame.Teams.OrderByDescending(t => t.TotalScore).First().Id;
 
                 var roundScores = currentGame.Teams.Select(t => new TeamScoreDto
                 {

@@ -12,6 +12,8 @@ namespace Hokm.Application.DTOs.Product
         long Price,
         int? CoinAmount,
         int? VipDurationDays,
-        bool IsFree
+        bool IsFree,
+        List<ProductItemDto> Items,
+        string? MarketSku
     );
 }
