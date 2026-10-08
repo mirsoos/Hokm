@@ -5,6 +5,7 @@ using Hokm.Application.Interfaces;
 using Hokm.Domain.Entities;
 using Hokm.Domain.Enums;
 using MediatR;
+using Microsoft.Extensions.Options;
 
 namespace Hokm.Application.Features.InitiatePayment.Commands
 {
@@ -21,13 +22,13 @@ namespace Hokm.Application.Features.InitiatePayment.Commands
             IProductRepository productRepository,
             ITransactionRepository transactionRepository,
             IDirectPaymentService directPaymentService,
-            PaymentSettings paymentSettings)
+            IOptions<PaymentSettings> paymentSettings)
         {
             _userRepository = userRepository;
             _productRepository = productRepository;
             _transactionRepository = transactionRepository;
             _directPaymentService = directPaymentService;
-            _paymentSettings = paymentSettings;
+            _paymentSettings = paymentSettings.Value;
         }
 
         public async Task<ErrorOr<InitiatePaymentResultDto>> Handle(InitiatePaymentCommand request, CancellationToken cancellationToken)

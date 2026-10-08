@@ -1,4 +1,4 @@
-﻿using Hokm.Application.Exception;
+﻿using Hokm.Application.Exceptions;
 using Hokm.Application.Interfaces;
 using Hokm.Domain.Entities;
 using Hokm.Domain.Enums;

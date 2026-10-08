@@ -524,6 +524,25 @@ namespace Hokm.Presentation.gRPC.Services
             {
                 try
                 {
+                    bool reportAutoPlay = false;
+
+                    using (var scope = _scopeFactory.CreateScope())
+                    {
+                        var gameRepo = scope.ServiceProvider.GetRequiredService<IGameRepository>();
+                        var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+
+                        var game = await gameRepo.GetByIdAsync(gameId, context.CancellationToken);
+                        var player = game?.Players.FirstOrDefault(p => p.Id == playerId);
+
+                        if (player != null)
+                        {
+                            var user = await userRepo.GetByIdAsync(playerId, context.CancellationToken);
+                            bool isRealBot = user?.IsBot ?? false;
+
+                            reportAutoPlay = !isRealBot && player.IsAutoPlay;
+                        }
+                    }
+
                     var statusEvent = new GameEvent
                     {
                         EventType = "player_status_changed",
@@ -531,7 +550,7 @@ namespace Hokm.Presentation.gRPC.Services
                         {
                             PlayerId = playerId.ToString(),
                             IsOnline = true,
-                            IsAutoPlay = false
+                            IsAutoPlay = reportAutoPlay
                         })
                     };
                     await _streamingService.BroadcastAsync(gameId, statusEvent, context.CancellationToken);
