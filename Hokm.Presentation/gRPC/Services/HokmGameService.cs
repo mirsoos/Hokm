@@ -15,6 +15,7 @@ using Hokm.Application.Features.PickTrump.Commands;
 using Hokm.Application.Features.PlayCard.Commands;
 using Hokm.Application.Features.ReadyToPlay.Commands;
 using Hokm.Application.Features.Snapshot.Queries;
+using Hokm.Application.Features.TableConfig.Queries.GetTableConfigs;
 using Hokm.Application.Features.TrickDetails.Queries.GetTrickDetails;
 using Hokm.Application.Interfaces;
 using Hokm.Application.Realtime.Execution;
@@ -658,6 +659,30 @@ namespace Hokm.Presentation.gRPC.Services
                     await _streamingService.BroadcastAsync(lobbyId, updateEvent, CancellationToken.None);
                 }
             }
+        }
+
+        public override async Task<GetTableConfigsResponse> GetTableConfigs(GetTableConfigsRequest request,ServerCallContext context)
+        {
+            var result = await _mediator.Send(new GetTableConfigsQuery(), context.CancellationToken);
+
+            if (result.IsError)
+            {
+                var first = result.FirstError;
+                throw new RpcException(new Status(StatusCode.Internal, first.Description));
+            }
+
+            var response = new GetTableConfigsResponse();
+            response.Configs.AddRange(result.Value.Select(c => new TableConfigMessage
+            {
+                Kind = (TableKind)c.Kind,
+                EntryFee = c.EntryFee,
+                Prize = c.Prize,
+                Rounds = c.Rounds,
+                WinXp = c.WinXp,
+                LossXp = c.LossXp,
+            }));
+
+            return response;
         }
 
         private async Task HandleGameDisconnect(Guid gameId, Guid playerId)

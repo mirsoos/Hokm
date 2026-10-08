@@ -65,7 +65,6 @@ namespace Hokm.Application.Features.PlayCard.Commands
 
             await _gameRepository.UpdateAsync(currentGame, cancellationToken);
 
-            // محاسبه نوبت نفر بعدی
             Guid? nextPlayerId = null;
             if (currentGame.Status == GameStatus.Playing)
             {
@@ -85,7 +84,6 @@ namespace Hokm.Application.Features.PlayCard.Commands
                 }
             )), cancellationToken);
 
-            // به‌روزرسانی دست بازیکنان
             if (currentGame.CurrentRoundIndex.HasValue && currentGame.Rounds.Count > currentGame.CurrentRoundIndex.Value)
             {
                 var activeRound = currentGame.Rounds[currentGame.CurrentRoundIndex.Value];
@@ -111,7 +109,6 @@ namespace Hokm.Application.Features.PlayCard.Commands
                 }
             }
 
-            // بررسی پایان دست (Trick)
             bool isTrickFinished = currentGame.LastTrickWinnerPlayerId.HasValue;
             if (isTrickFinished)
             {
@@ -148,7 +145,6 @@ namespace Hokm.Application.Features.PlayCard.Commands
                 )), cancellationToken);
             }
 
-            // مدیریت نوبت بعدی (موتور محرک بدون بن‌بست)
             if (currentGame.Status == GameStatus.Playing && nextPlayerId.HasValue)
             {
                 var nextPlayer = currentGame.Players.FirstOrDefault(p => p.Id == nextPlayerId.Value);
@@ -156,19 +152,16 @@ namespace Hokm.Application.Features.PlayCard.Commands
                 {
                     if (nextPlayer.IsAutoPlay)
                     {
-                        // اگر ربات یا اتوپلی است: زمان کوتاه همراه با فرصت انیمیشن جمع‌آوری دست
                         double delaySeconds = isTrickFinished ? 2.0 : 1.2;
                         await _timerManager.StartTimer(currentGame.Id, nextPlayer.Id, delaySeconds, isTrumpSelection: false);
                     }
                     else
                     {
-                        // اگر انسان است: تایمر مستقیم و استاندارد ارسال به فرانت
                         await _timerManager.StartTimer(currentGame.Id, nextPlayer.Id, GameConstants.HumanTurnTimeoutSeconds, isTrumpSelection: false);
                     }
                 }
             }
 
-            // پایان راند
             if (currentGame.Status == GameStatus.RoundFinished)
             {
                 var winningTeamId = currentGame.LastRoundWinnerTeamId
@@ -190,7 +183,6 @@ namespace Hokm.Application.Features.PlayCard.Commands
                     }
                 )), cancellationToken);
 
-                // ارجاع ایمن به صف Worker جهت شروع راند بعدی پس از تاخیر انیمیشن
                 _ = Task.Run(async () =>
                 {
                     try
@@ -206,7 +198,6 @@ namespace Hokm.Application.Features.PlayCard.Commands
                 });
             }
 
-            // پایان کل بازی
             if (currentGame.Status == GameStatus.Finished)
             {
                 var winnerTeam = currentGame.Teams.FirstOrDefault(t => t.TotalScore >= currentGame.TargetRounds);

@@ -43,5 +43,14 @@ namespace Hokm.Application.Constants
             TableKind.Vip => 100,
             _ => 25
         };
+
+        public static int GetTargetRounds(TableKind tableKind) => tableKind switch
+        {
+            TableKind.Bot => 1,
+            TableKind.Speedy => 3,
+            TableKind.Pro => 5,
+            TableKind.Vip => 7,
+            _ => 3,
+        };
     }
 }

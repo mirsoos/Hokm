@@ -13,6 +13,7 @@ service HokmGameService {
     rpc GetSnapshot (GetSnapshotRequest) returns (GameSnapshotResponse);
     rpc SendInGameAction(InGameActionRequest) returns (InGameActionResponse);
     rpc ReadyToPlay (ReadyToPlayRequest) returns (ReadyToPlayResponse);
+    rpc GetTableConfigs (GetTableConfigsRequest) returns (GetTableConfigsResponse);
 
     rpc ResumeControl (ResumeControlRequest) returns (ResumeControlResponse);
     rpc GetTrickDetails (GetTrickDetailsRequest) returns (GetTrickDetailsResponse);
@@ -66,7 +67,7 @@ enum PaymentType {
     COINS = 2;
     DIRECT_PAYMENT = 3;
     ADS = 4;
-    MARKET_IAP = 5
+    MARKET_IAP = 5;
 }
 
 enum GatewayType {
@@ -342,4 +343,19 @@ message VerifyStorePurchaseRequest {
 message VerifyStorePurchaseResponse {
     bool success = 1;
     string message = 2;
+}
+message GetTableConfigsRequest {
+}
+
+message TableConfigMessage {
+    TableKind kind = 1;
+    int32 entry_fee = 2;
+    int32 prize = 3;
+    int32 rounds = 4;
+    int32 win_xp = 5;
+    int32 loss_xp = 6;
+}
+
+message GetTableConfigsResponse {
+    repeated TableConfigMessage configs = 1;
 }
