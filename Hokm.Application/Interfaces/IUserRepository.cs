@@ -16,7 +16,7 @@ namespace Hokm.Application.Interfaces
         Task<bool> DeductCoinsAsync(List<Guid> userIds, int amount, CancellationToken cancellationToken);
         Task UpdateAsync(User user, CancellationToken cancellationToken);
         Task<List<User>> GetRandomBotsAsync(int count, List<Guid> excludeUserIds, CancellationToken cancellationToken);
-
+        Task<List<User>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken);
         Task<bool> AddCoinsAsync(Guid userId, long amount, CancellationToken cancellationToken );
         Task<bool> DeductCoinsAsync(Guid userId, long amount, CancellationToken cancellationToken);
         Task RecordWinAsync(Guid userId, int xpReward, CancellationToken cancellationToken);

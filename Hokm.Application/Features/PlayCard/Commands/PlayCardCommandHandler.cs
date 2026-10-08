@@ -250,6 +250,18 @@ namespace Hokm.Application.Features.PlayCard.Commands
                     });
                 }
 
+                using (var scope = _scopeFactory.CreateScope())
+                {
+                    var cache = scope.ServiceProvider.GetRequiredService<IRedisCacheService>();
+
+                    foreach (var playerId in currentGame.Players.Select(p => p.UserId))
+                    {
+                        await cache.RemoveAsync($"rank:weekly:{playerId}", cancellationToken);
+                        await cache.RemoveAsync($"rank:monthly:{playerId}", cancellationToken);
+                        await cache.RemoveAsync($"rank:winrate:{playerId}", cancellationToken);
+                    }
+                }
+
                 await _mediator.Publish(new GameEventNotification(
                     request.GameId,
                     "game_finished",

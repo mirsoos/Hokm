@@ -39,6 +39,14 @@ namespace Hokm.Infrastructure.Repositories.Implementations
                 .ToListAsync(cancellationToken);
         }
 
+        public async Task<List<Product>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+        {
+            var idList = ids.ToList();
+            if (idList.Count == 0) return new List<Product>();
+
+            var filter = Builders<Product>.Filter.In(p => p.Id, idList);
+            return await _mongoDb.Products.Find(filter).ToListAsync(cancellationToken);
+        }
         public async Task<Product?> GetByItemIdAsync(Guid itemId, CancellationToken cancellationToken = default)
         {
             var filter = Builders<Product>.Filter.ElemMatch(p => p.Items, i => i.Id == itemId);

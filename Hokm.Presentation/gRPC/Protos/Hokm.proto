@@ -14,6 +14,7 @@ service HokmGameService {
     rpc SendInGameAction(InGameActionRequest) returns (InGameActionResponse);
     rpc ReadyToPlay (ReadyToPlayRequest) returns (ReadyToPlayResponse);
     rpc GetTableConfigs (GetTableConfigsRequest) returns (GetTableConfigsResponse);
+    rpc GetLeaderboard (GetLeaderboardRequest) returns (GetLeaderboardResponse);
 
     rpc ResumeControl (ResumeControlRequest) returns (ResumeControlResponse);
     rpc GetTrickDetails (GetTrickDetailsRequest) returns (GetTrickDetailsResponse);
@@ -358,4 +359,30 @@ message TableConfigMessage {
 
 message GetTableConfigsResponse {
     repeated TableConfigMessage configs = 1;
+}
+enum LeaderboardType {
+    LEADERBOARD_INVALID = 0;
+    LEADERBOARD_WEEKLY = 1;
+    LEADERBOARD_MONTHLY = 2;
+    LEADERBOARD_WINRATE = 3;
+}
+
+message GetLeaderboardRequest {
+    string user_id = 1;
+    LeaderboardType type = 2;
+}
+
+message LeaderboardEntry {
+    int32 rank = 1;
+    string user_id = 2;
+    string name = 3;
+    int32 avatar_ref = 4;
+    string border_asset_key = 5;
+    int32 level = 6;
+}
+
+message GetLeaderboardResponse {
+    repeated LeaderboardEntry entries = 1;
+    int32 my_rank = 2;
+    bool my_rank_in_top = 3;
 }

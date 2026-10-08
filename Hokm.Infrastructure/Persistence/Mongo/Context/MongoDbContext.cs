@@ -2,6 +2,7 @@
 using Hokm.Infrastructure.Configurations;
 using Hokm.Infrastructure.Persistence.Mongo.Configurations;
 using Microsoft.Extensions.Options;
+using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace Hokm.Infrastructure.Persistence.Mongo.Context
@@ -46,14 +47,24 @@ namespace Hokm.Infrastructure.Persistence.Mongo.Context
                     {
                         Name = "uniq_payment_token",
                         Unique = true,
-                        PartialFilterExpression = Builders<Transaction>.Filter.And(
-                            Builders<Transaction>.Filter.Exists(t => t.PaymentToken, true),
-                            Builders<Transaction>.Filter.Ne(t => t.PaymentToken, null)
+                        PartialFilterExpression = new BsonDocument(
+                            "paymentToken",
+                            new BsonDocument("$type", "string")
                         )
                     };
 
                     Transactions.Indexes.CreateOne(
                         new CreateIndexModel<Transaction>(keys, options));
+
+                    Games.Indexes.CreateOne(new CreateIndexModel<Game>(
+                        Builders<Game>.IndexKeys
+                            .Ascending(g => g.Status)
+                            .Descending(g => g.CreateDate)));
+
+                    Users.Indexes.CreateOne(new CreateIndexModel<User>(
+                        Builders<User>.IndexKeys
+                            .Ascending(u => u.IsBot)
+                            .Descending(u => u.Wins)));
 
                     _indexesEnsured = true;
                 }

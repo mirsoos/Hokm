@@ -11,6 +11,7 @@ using Hokm.Application.Features.GameStarted.Commands;
 using Hokm.Application.Features.GameStarted.Queries;
 using Hokm.Application.Features.GetPlayerProfile.Queries;
 using Hokm.Application.Features.GetRandomBot.Queries;
+using Hokm.Application.Features.Leaderboard.Queries.GetLeaderboard;
 using Hokm.Application.Features.PickTrump.Commands;
 using Hokm.Application.Features.PlayCard.Commands;
 using Hokm.Application.Features.ReadyToPlay.Commands;
@@ -578,6 +579,48 @@ namespace Hokm.Presentation.gRPC.Services
             }
         }
 
+        public override async Task<GetLeaderboardResponse> GetLeaderboard(GetLeaderboardRequest request,ServerCallContext context)
+        {
+            if (!Guid.TryParse(request.UserId, out var userId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "شناسه کاربر نامعتبر است."));
+            }
+
+            var type = request.Type switch
+            {
+                LeaderboardType.LeaderboardWeekly => Domain.Enums.LeaderboardType.Weekly,
+                LeaderboardType.LeaderboardMonthly => Domain.Enums.LeaderboardType.Monthly,
+                LeaderboardType.LeaderboardWinrate => Domain.Enums.LeaderboardType.Winrate,
+                _ => Hokm.Domain.Enums.LeaderboardType.Weekly
+            };
+
+            var query = new GetLeaderboardQuery(userId, type);
+            var result = await _mediator.Send(query, context.CancellationToken);
+
+            if (result.IsError)
+            {
+                // اگه خالی بود، لیست خالی برگردون، نه خطا
+                return new GetLeaderboardResponse();
+            }
+
+            var response = new GetLeaderboardResponse
+            {
+                MyRank = result.Value.MyRank,
+                MyRankInTop = result.Value.MyRankInTop
+            };
+
+            response.Entries.AddRange(result.Value.Entries.Select(e => new LeaderboardEntry
+            {
+                Rank = e.Rank,
+                UserId = e.UserId.ToString(),
+                Name = e.Name,
+                AvatarRef = e.AvatarRef,
+                BorderAssetKey = e.BorderAssetKey ?? "",
+                Level = e.Level
+            }));
+
+            return response;
+        }
         public override async Task StreamLobby(StreamRequest request, IServerStreamWriter<GameEvent> responseStream, ServerCallContext context)
         {
             if (!Guid.TryParse(request.GameId, out var lobbyId) || !Guid.TryParse(request.PlayerId, out var playerId))

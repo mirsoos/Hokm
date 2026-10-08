@@ -54,6 +54,14 @@ namespace Hokm.Infrastructure.Repositories.Implementations
             await _mongoDb.Users.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
         }
 
+        public async Task<List<User>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken)
+        {
+            var idList = ids.ToList();
+            if (idList.Count == 0) return new List<User>();
+
+            var filter = Builders<User>.Filter.In(u => u.Id, idList);
+            return await _mongoDb.Users.Find(filter).ToListAsync(cancellationToken);
+        }
         public async Task UpdateProfileAsync(Guid userId, string fullName, int avatarRef, CancellationToken cancellationToken)
         {
             var filter = Builders<User>.Filter.Eq(u => u.Id, userId);

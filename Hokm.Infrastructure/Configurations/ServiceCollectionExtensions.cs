@@ -91,6 +91,7 @@ namespace Hokm.Infrastructure.Configurations
             services.AddScoped<IDirectPaymentService, ZarinpalService>();
             services.AddScoped<IStorePaymentService, BazaarService>();
             services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
+            services.AddScoped<ILeaderboardRepository, MongoLeaderboardRepository>();
             services.AddSingleton<GameExecutionCoordinator>();
 
 
