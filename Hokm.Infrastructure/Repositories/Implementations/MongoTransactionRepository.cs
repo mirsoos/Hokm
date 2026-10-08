@@ -1,4 +1,5 @@
-﻿using Hokm.Application.Interfaces;
+﻿using Hokm.Application.Exception;
+using Hokm.Application.Interfaces;
 using Hokm.Domain.Entities;
 using Hokm.Domain.Enums;
 using Hokm.Infrastructure.Persistence.Mongo.Context;
@@ -17,7 +18,15 @@ namespace Hokm.Infrastructure.Repositories.Implementations
 
         public async Task CreateAsync(Transaction transaction, CancellationToken cancellationToken = default)
         {
-            await _mongoDb.Transactions.InsertOneAsync(transaction, null, cancellationToken);
+            try
+            {
+                await _mongoDb.Transactions.InsertOneAsync(transaction, null, cancellationToken);
+            }
+            catch (MongoWriteException ex)
+                when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+            {
+                throw new DuplicatePaymentException(transaction.PaymentToken);
+            }
         }
 
         public async Task<Transaction?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)

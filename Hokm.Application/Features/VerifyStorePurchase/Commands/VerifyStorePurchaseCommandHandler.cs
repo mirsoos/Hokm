@@ -1,5 +1,6 @@
 ﻿using ErrorOr;
 using Hokm.Application.DTOs.Payment;
+using Hokm.Application.Exceptions;
 using Hokm.Application.Interfaces;
 using Hokm.Domain.Entities;
 using Hokm.Domain.Enums;
@@ -61,7 +62,17 @@ namespace Hokm.Application.Features.VerifyStorePurchase.Commands
             );
 
             transaction.Complete(request.PurchaseToken);
-            await _transactionRepository.CreateAsync(transaction, cancellationToken);
+
+            try
+            {
+                await _transactionRepository.CreateAsync(transaction, cancellationToken);
+            }
+            catch (DuplicatePaymentException)
+            {
+                return Error.Conflict(
+                    "Payment.AlreadyProcessed",
+                    "این رسید خرید قبلاً پردازش و تحویل داده شده است.");
+            }
 
             if (product.ProductType == ProductType.VipSubscription)
             {

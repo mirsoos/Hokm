@@ -83,7 +83,7 @@ app.MapGet("/", () => "Hokm API is running");
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<IMongoDatabase>();
-    var names = new[] { "Users", "Games" };
+    var names = new[] { "Users", "Games" , "Products", "Transactions" };
     var existing = await db.ListCollectionNames().ToListAsync();
     foreach (var n in names)
         if (!existing.Contains(n))
