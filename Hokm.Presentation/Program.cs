@@ -13,7 +13,8 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 builder.Services.AddInfrastructure(builder.Configuration);
-
+builder.Services.Configure<Hokm.Application.Configurations.PaymentSettings>(
+    builder.Configuration.GetSection("PaymentSettings"));
 builder.Services.AddSingleton<GameStreamingService>();
 builder.Services.AddSingleton<GameTimerManager>();
 

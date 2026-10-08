@@ -1,4 +1,5 @@
 ﻿using ErrorOr;
+using Hokm.Application.Configurations;
 using Hokm.Application.DTOs.Payment;
 using Hokm.Application.Interfaces;
 using Hokm.Domain.Entities;
@@ -13,17 +14,20 @@ namespace Hokm.Application.Features.InitiatePayment.Commands
         private readonly IProductRepository _productRepository;
         private readonly ITransactionRepository _transactionRepository;
         private readonly IDirectPaymentService _directPaymentService;
+        private readonly PaymentSettings _paymentSettings;
 
         public InitiatePaymentCommandHandler(
             IUserRepository userRepository,
             IProductRepository productRepository,
             ITransactionRepository transactionRepository,
-            IDirectPaymentService directPaymentService)
+            IDirectPaymentService directPaymentService,
+            PaymentSettings paymentSettings)
         {
             _userRepository = userRepository;
             _productRepository = productRepository;
             _transactionRepository = transactionRepository;
             _directPaymentService = directPaymentService;
+            _paymentSettings = paymentSettings;
         }
 
         public async Task<ErrorOr<InitiatePaymentResultDto>> Handle(InitiatePaymentCommand request, CancellationToken cancellationToken)
@@ -41,8 +45,13 @@ namespace Hokm.Application.Features.InitiatePayment.Commands
             if (product.PaymentType != PaymentType.DirectPayment) return Error.Validation("Product.InvalidPayment", "این محصول با درگاه مستقیم قابل خرید نیست.");
 
             var invoiceNumber = $"INV-{DateTime.UtcNow.Ticks}-{request.UserId.ToString().Substring(0, 4)}";
-            var callbackUrl = "https://api.mygame.com/api/payment/callback";
-
+            var callbackUrl = _paymentSettings.CallbackUrl;
+            if (string.IsNullOrWhiteSpace(callbackUrl))
+            {
+                return Error.Failure(
+                    "Payment.MissingConfig",
+                    "آدرس بازگشت پرداخت تنظیم نشده است.");
+            }
             try
             {
                 var paymentUrl = await _directPaymentService.RequestPaymentUrlAsync(
