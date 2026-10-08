@@ -1,9 +1,8 @@
 ﻿using ErrorOr;
-using Hokm.Application.Features.GetPlayerProfile.Queries;
 using Hokm.Application.Interfaces;
 using MediatR;
 
-namespace Hokm.Application.Features.PlayerProfile.Queries.GetPlayerProfile
+namespace Hokm.Application.Features.GetPlayerProfile.Queries
 {
     public class GetPlayerProfileQueryHandler
         : IRequestHandler<GetPlayerProfileQuery, ErrorOr<GetPlayerProfileResponse>>

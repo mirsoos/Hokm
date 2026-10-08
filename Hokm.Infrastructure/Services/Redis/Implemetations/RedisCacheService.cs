@@ -1,4 +1,4 @@
-﻿using Hokm.Infrastructure.Services.Redis.Interfaces;
+﻿using Hokm.Application.Interfaces;
 using StackExchange.Redis;
 using System.Text.Json;
 

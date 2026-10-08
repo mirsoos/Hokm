@@ -3,7 +3,6 @@ using Hokm.Application.DTOs.Auth;
 using Hokm.Application.Interfaces;
 using Hokm.Domain.Entities;
 using MediatR;
-using Hokm.Infrastructure.Services.Redis.Interfaces;
 
 namespace Hokm.Application.Features.RegisterUser.Commands.CompleteProfile
 {

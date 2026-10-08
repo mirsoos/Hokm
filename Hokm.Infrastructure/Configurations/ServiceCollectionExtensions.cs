@@ -7,7 +7,6 @@ using Hokm.Infrastructure.Security;
 using Hokm.Infrastructure.Services.Payment.Bazaar;
 using Hokm.Infrastructure.Services.Payment.Zarinpal;
 using Hokm.Infrastructure.Services.Redis.Implemetations;
-using Hokm.Infrastructure.Services.Redis.Interfaces;
 using Hokm.Infrastructure.Services.Sms;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;

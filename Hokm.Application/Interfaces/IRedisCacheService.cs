@@ -1,5 +1,4 @@
-﻿
-namespace Hokm.Infrastructure.Services.Redis.Interfaces
+﻿namespace Hokm.Application.Interfaces
 {
     public interface IRedisCacheService
     {

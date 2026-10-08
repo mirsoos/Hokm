@@ -1,5 +1,4 @@
-﻿
-namespace Hokm.Infrastructure.Services.Redis.Constants
+﻿namespace Hokm.Application.Constants
 {
     public class RedisCacheKeySchema
     {

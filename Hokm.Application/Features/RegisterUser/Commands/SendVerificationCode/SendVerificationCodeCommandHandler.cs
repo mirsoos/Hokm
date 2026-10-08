@@ -1,8 +1,7 @@
 ﻿using ErrorOr;
+using Hokm.Application.Constants;
 using Hokm.Application.DTOs.Auth;
 using Hokm.Application.Interfaces;
-using Hokm.Infrastructure.Services.Redis.Constants;
-using Hokm.Infrastructure.Services.Redis.Interfaces;
 using MediatR;
 
 namespace Hokm.Application.Features.RegisterUser.Commands.SendVerificationCode
