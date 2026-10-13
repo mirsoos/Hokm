@@ -1,5 +1,6 @@
 ﻿using Hokm.Application.Realtime.Execution;
 using Hokm.Infrastructure.Configurations;
+using Hokm.Presentation.gRPC.Middleware;
 using Hokm.Presentation.gRPC.Services;
 using MediatR;
 using Microsoft.OpenApi.Models;
@@ -73,6 +74,7 @@ app.UseCors("AllowFrontend");
 app.UseGrpcWeb(new GrpcWebOptions { DefaultEnabled = true });
 
 app.UseAuthentication();
+app.UseMiddleware<RateLimitMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 
