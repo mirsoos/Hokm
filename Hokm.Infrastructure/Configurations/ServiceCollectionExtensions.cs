@@ -12,22 +12,27 @@ using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using MongoDB.Driver;
-using StackExchange.Redis;
 using System.Text;
 
 namespace Hokm.Infrastructure.Configurations
 {
     public static class ServiceCollectionExtensions
     {
-        public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
+        public static IHostApplicationBuilder AddInfrastructure(this IHostApplicationBuilder builder)
         {
-            var infraSettings = configuration.GetSection("InfrastructureSettings").Get<InfrastructureSettings>();
+            var services = builder.Services;
+            var configuration = builder.Configuration;
+
+            var infraSettings = configuration.GetSection("InfrastructureSettings")
+                .Get<InfrastructureSettings>();
 
             MongoDbConfiguration.Configure();
 
-            services.Configure<InfrastructureSettings>(configuration.GetSection("InfrastructureSettings"));
+            services.Configure<InfrastructureSettings>(
+                configuration.GetSection("InfrastructureSettings"));
             services.AddSingleton(infraSettings);
 
             // SMS Service
@@ -35,10 +40,10 @@ namespace Hokm.Infrastructure.Configurations
                 .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
                 {
                     UseProxy = false,
-                    // 👈 اضافه کردن این خط به هندلر کلاینت پیامک جهت نادیده گرفتن ارور SSL خارجی سرور پیامک
                     ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
                 });
 
+            // Authentication & Authorization
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
@@ -54,17 +59,16 @@ namespace Hokm.Infrastructure.Configurations
                 });
             services.AddAuthorization();
 
-            services.AddSingleton<IMongoClient>(sp =>
-                new MongoClient(infraSettings.MongoConnection));
+            builder.AddMongoDBClient("mongodb");
+            builder.AddRedisClient("redis");
+
             services.AddSingleton(sp =>
             {
                 var client = sp.GetRequiredService<IMongoClient>();
                 return client.GetDatabase(infraSettings.MongoDatabaseName);
             });
-            services.AddScoped<MongoDbContext>();
 
-            services.AddSingleton<IConnectionMultiplexer>(sp =>
-                ConnectionMultiplexer.Connect(infraSettings.RedisConnection));
+            services.AddScoped<MongoDbContext>();
 
             services.AddMassTransit(x =>
             {
@@ -83,6 +87,7 @@ namespace Hokm.Infrastructure.Configurations
                 });
             });
 
+            // Repositories & Services
             services.AddScoped<IGameRepository, MongoGameRepository>();
             services.AddScoped<IUserRepository, MongoUserRepository>();
             services.AddScoped<IRedisCacheService, RedisCacheService>();
@@ -94,7 +99,7 @@ namespace Hokm.Infrastructure.Configurations
             services.AddScoped<ILeaderboardRepository, MongoLeaderboardRepository>();
             services.AddSingleton<GameExecutionCoordinator>();
 
-
+            // CORS
             services.AddCors(options =>
             {
                 options.AddPolicy("AllowFrontend", policy =>
@@ -103,15 +108,15 @@ namespace Hokm.Infrastructure.Configurations
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials()
-                        .WithExposedHeaders("Grpc-Status", "Grpc-Message", "Grpc-Encoding", "Grpc-Accept-Encoding");
-
+                          .WithExposedHeaders(
+                              "Grpc-Status",
+                              "Grpc-Message",
+                              "Grpc-Encoding",
+                              "Grpc-Accept-Encoding");
                 });
             });
 
-            //BsonSerializer.RegisterSerializer(new GuidSerializer(BsonType.String));
-
-
-            return services;
+            return builder;
         }
     }
 }

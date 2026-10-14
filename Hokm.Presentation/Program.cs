@@ -1,4 +1,4 @@
-﻿using Hokm.Application.Realtime.Execution;
+using Hokm.Application.Realtime.Execution;
 using Hokm.Infrastructure.Configurations;
 using Hokm.Presentation.gRPC.Middleware;
 using Hokm.Presentation.gRPC.Services;
@@ -7,13 +7,16 @@ using Microsoft.OpenApi.Models;
 using MongoDB.Driver;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults();
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenAnyIP(5128, o => o.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1);
     options.ListenAnyIP(5129, o => o.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http2);
 });
 
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.AddInfrastructure();
+
 builder.Services.Configure<Hokm.Application.Configurations.PaymentSettings>(
     builder.Configuration.GetSection("PaymentSettings"));
 builder.Services.AddSingleton<GameStreamingService>();
@@ -60,6 +63,8 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddGrpc();
 
 var app = builder.Build();
+
+app.MapDefaultEndpoints();
 
 app.UseSwagger();
 app.UseSwaggerUI(c =>

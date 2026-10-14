@@ -221,10 +221,17 @@ namespace Hokm.Application.Features.PlayCard.Commands
                             foreach (var winnerId in winningPlayerIds)
                             {
                                 var user = await userRepo.GetByIdAsync(winnerId, CancellationToken.None);
-                                if (user != null && !user.IsBot)
+                                var player = currentGame.Players.FirstOrDefault(p => p.Id == winnerId);
+
+                                if (user != null && !user.IsBot && player?.IsAutoPlay != true)
                                 {
                                     if (coinReward > 0) user.AddCoins(coinReward);
                                     user.RecordWin(winXp);
+                                    await userRepo.UpdateAsync(user, CancellationToken.None);
+                                }
+                                else if (user != null && !user.IsBot)
+                                {
+                                    user.RecordLoss(lossXp);
                                     await userRepo.UpdateAsync(user, CancellationToken.None);
                                 }
                             }

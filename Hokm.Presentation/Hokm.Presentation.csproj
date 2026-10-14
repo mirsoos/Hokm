@@ -25,6 +25,7 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\Hokm.Application\Hokm.Application.csproj" />
 	  <ProjectReference Include="..\Hokm.Infrastructure\Hokm.Infrastructure.csproj" />
+	  <ProjectReference Include="..\Hokm.ServiceDefaults\Hokm.ServiceDefaults.csproj" />
 	</ItemGroup>
 
 </Project>

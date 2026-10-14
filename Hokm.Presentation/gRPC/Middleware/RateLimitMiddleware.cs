@@ -1,5 +1,4 @@
-﻿
-using Hokm.Application.Interfaces;
+﻿using Hokm.Application.Interfaces;
 using Microsoft.Extensions.Logging;
 using System.Security.Claims;
 
@@ -9,24 +8,18 @@ namespace Hokm.Presentation.gRPC.Middleware
     {
         private const int MaxRequests = 50;
 
-        private static readonly TimeSpan Window =
-            TimeSpan.FromSeconds(60);
+        private static readonly TimeSpan Window = TimeSpan.FromSeconds(60);
 
         private readonly RequestDelegate _next;
-        private readonly IRedisCacheService _cache;
         private readonly ILogger<RateLimitMiddleware> _logger;
 
-        public RateLimitMiddleware(
-            RequestDelegate next,
-            IRedisCacheService cache,
-            ILogger<RateLimitMiddleware> logger)
+        public RateLimitMiddleware(RequestDelegate next,ILogger<RateLimitMiddleware> logger)
         {
             _next = next;
-            _cache = cache;
             _logger = logger;
         }
 
-        public async Task InvokeAsync(HttpContext context)
+        public async Task InvokeAsync(HttpContext context,IRedisCacheService cache)
         {
             var path = context.Request.Path.Value ?? string.Empty;
 
@@ -48,7 +41,7 @@ namespace Hokm.Presentation.gRPC.Middleware
 
             try
             {
-                result = await _cache.CheckRateLimitAsync(
+                result = await cache.CheckRateLimitAsync(
                     key,
                     MaxRequests,
                     Window);
@@ -65,8 +58,7 @@ namespace Hokm.Presentation.gRPC.Middleware
                 return;
             }
 
-            context.Response.Headers["X-RateLimit-Limit"] =
-                MaxRequests.ToString();
+            context.Response.Headers["X-RateLimit-Limit"] = MaxRequests.ToString();
 
             context.Response.Headers["X-RateLimit-Remaining"] =
                 Math.Max(0, MaxRequests - result.Count).ToString();
@@ -78,18 +70,13 @@ namespace Hokm.Presentation.gRPC.Middleware
                     (long)Math.Ceiling(
                         result.RetryAfterMilliseconds / 1000d));
 
-                context.Response.StatusCode =
-                    StatusCodes.Status429TooManyRequests;
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
 
-                context.Response.Headers["Retry-After"] =
-                    retryAfterSeconds.ToString();
+                context.Response.Headers["Retry-After"] = retryAfterSeconds.ToString();
 
-                context.Response.ContentType =
-                    "text/plain; charset=utf-8";
+                context.Response.ContentType = "text/plain; charset=utf-8";
 
-                await context.Response.WriteAsync(
-                    "تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً کمی صبر کنید.",
-                    context.RequestAborted);
+                await context.Response.WriteAsync("تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً کمی صبر کنید.",context.RequestAborted);
 
                 return;
             }

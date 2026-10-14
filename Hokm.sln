@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.14.37012.4
+# Visual Studio Version 18
+VisualStudioVersion = 18.9.12128.139 oobstable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hokm.Domain", "Hokm.Domain\Hokm.Domain.csproj", "{251D6354-309E-4B94-8DF8-F115E84240E2}"
 EndProject
@@ -12,6 +12,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hokm.Application", "Hokm.Application\Hokm.Application.csproj", "{3610111E-A614-7A2D-972E-C6588B8D09E1}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hokm.Infrastructure", "Hokm.Infrastructure\Hokm.Infrastructure.csproj", "{151C8211-8330-22FE-F51B-5F86BAFC1B3C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hokm.AppHost", "Hokm.AppHost\Hokm.AppHost.csproj", "{90B3C0FD-7005-49D2-B6BF-50373872B173}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hokm.ServiceDefaults", "Hokm.ServiceDefaults\Hokm.ServiceDefaults.csproj", "{47091CF4-DFB2-3A61-9C13-D042D346F3BF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -39,6 +43,14 @@ Global
 		{151C8211-8330-22FE-F51B-5F86BAFC1B3C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{151C8211-8330-22FE-F51B-5F86BAFC1B3C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{151C8211-8330-22FE-F51B-5F86BAFC1B3C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{90B3C0FD-7005-49D2-B6BF-50373872B173}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{90B3C0FD-7005-49D2-B6BF-50373872B173}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{90B3C0FD-7005-49D2-B6BF-50373872B173}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{90B3C0FD-7005-49D2-B6BF-50373872B173}.Release|Any CPU.Build.0 = Release|Any CPU
+		{47091CF4-DFB2-3A61-9C13-D042D346F3BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{47091CF4-DFB2-3A61-9C13-D042D346F3BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{47091CF4-DFB2-3A61-9C13-D042D346F3BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{47091CF4-DFB2-3A61-9C13-D042D346F3BF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

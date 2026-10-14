@@ -14,9 +14,6 @@ namespace Hokm.Infrastructure.Configurations
         public bool SmsIrIsSandBox { get; set; }
         public int SmsIrTemplateId { get; set; }
 
-        public string RedisConnection { get; set; } = string.Empty;
-
-        public string MongoConnection { get; set; } = string.Empty;
         public string MongoDatabaseName { get; set; } = string.Empty;
 
     }
