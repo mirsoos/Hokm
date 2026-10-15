@@ -42,10 +42,15 @@ namespace Hokm.Application.Features.PlayCard.Commands
             if (currentGame == null)
                 throw new ArgumentNullException(nameof(request.GameId), "Game not found.");
 
-            _timerManager.CancelTimer(currentGame.Id);
 
             var card = new Card(request.Suit, request.Rank);
 
+            if (!currentGame.IsCardPlayable(request.PlayerId, card))
+            {
+                return Unit.Value;
+            }
+
+            _timerManager.CancelTimer(currentGame.Id);
             bool isCut = false;
             if (currentGame.CurrentRoundIndex.HasValue && currentGame.Rounds.Count > currentGame.CurrentRoundIndex.Value)
             {

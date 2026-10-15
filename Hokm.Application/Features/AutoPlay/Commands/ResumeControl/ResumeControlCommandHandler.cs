@@ -27,19 +27,6 @@ namespace Hokm.Application.Features.AutoPlay.Commands.ResumeControl
             var game = await _gameRepository.GetByIdAsync(request.GameId, cancellationToken);
             if (game == null) return Unit.Value;
 
-
-            Console.WriteLine("=== ResumeControl ===");
-            Console.WriteLine($"Status = {game.Status}");
-            Console.WriteLine($"TargetRounds = {game.TargetRounds}");
-            Console.WriteLine($"TableKind = {game.TableKind}");
-            Console.WriteLine($"Teams count = {game.Teams.Count}");
-            foreach (var t in game.Teams)
-            {
-                Console.WriteLine($"  Team {t.Id}: Score={t.TotalScore}, Players={t.PlayerIds.Count}");
-            }
-            Console.WriteLine($"Players count = {game.Players.Count}");
-            Console.WriteLine($"====================");
-
             if (game.Status == GameStatus.Finished)
             {
                 // برنده رو از WinnerPlayers پیدا کن (که EndGame قبلاً ست کرده)

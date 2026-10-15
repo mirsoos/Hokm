@@ -30,7 +30,7 @@ namespace Hokm.Application.Realtime.Execution
                 {
                     SingleReader = true,
                     SingleWriter = false,
-                    FullMode = BoundedChannelFullMode.DropWrite
+                    FullMode = BoundedChannelFullMode.Wait
                 });
 
             LastActivityUtc = DateTime.UtcNow;
@@ -40,12 +40,14 @@ namespace Hokm.Application.Realtime.Execution
 
         public async Task<TResponse> EnqueueAsync<TResponse>(GameCommandEnvelope<TResponse> envelope)
         {
-            var success = _queue.Writer.TryWrite(envelope);
-
-            if (!success)
+            try
+            {
+                await _queue.Writer.WriteAsync(envelope, _cts.Token);
+            }
+            catch (OperationCanceledException)
             {
                 envelope.CompletionSource.TrySetException(
-                    new InvalidOperationException("صف دستورات بازی پر است. لطفاً دوباره تلاش کنید."));
+                    new InvalidOperationException("بازی بسته شده است."));
             }
 
             return await envelope.CompletionSource.Task;
